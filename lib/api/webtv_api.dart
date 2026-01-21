@@ -125,16 +125,6 @@ class WebTVApi {
       final response = await _dio.get(url);
 
       print('Categories response status: ${response.statusCode}');
-      print('Categories response headers: ${response.headers}');
-
-      // Log response type and preview
-      print('Response data type: ${response.data.runtimeType}');
-      if (response.data is String) {
-        final preview = (response.data as String).length > 200
-            ? (response.data as String).substring(0, 200)
-            : response.data;
-        print('Response preview: $preview');
-      }
 
       if (response.statusCode == 200) {
         final data = _parseResponse(response);
@@ -144,11 +134,23 @@ class WebTVApi {
           throw Exception('API Error: ${data['error_long'] ?? data['error']}');
         }
         if (data['list'] != null) {
-          final categories = (data['list'] as List)
-              .map((item) => Category.fromJson(item))
-              .where((cat) => cat.status == '1') // Only active categories
-              .toList();
-          print('Parsed ${categories.length} active categories');
+          final categoryList = data['list'] as List;
+          print('Got ${categoryList.length} categories from list');
+
+          // The list API doesn't return titles, so we need to fetch each category's details
+          final categories = <Category>[];
+          for (final item in categoryList) {
+            final catId = int.tryParse(item['id']?.toString() ?? '0') ?? 0;
+            if (catId > 0 && item['status']?.toString() == '1') {
+              // Fetch full category details to get the title
+              final category = await _getCategoryDetails(catId);
+              if (category != null) {
+                categories.add(category);
+              }
+            }
+          }
+
+          print('Parsed ${categories.length} active categories with titles');
           return categories;
         }
         throw Exception('No categories in response');
@@ -173,6 +175,25 @@ class WebTVApi {
       print('Stack trace: $stackTrace');
       rethrow;
     }
+  }
+
+  /// Get single category details (to get title which list endpoint doesn't return)
+  Future<Category?> _getCategoryDetails(int categoryId) async {
+    final url = _buildUrl('go=categories&do=get&iq=$categoryId&fields=*');
+
+    try {
+      final response = await _dio.get(url);
+
+      if (response.statusCode == 200) {
+        final data = _parseResponse(response);
+        if (data['data'] != null) {
+          return Category.fromJson(data['data']);
+        }
+      }
+    } catch (e) {
+      print('Error fetching category $categoryId: $e');
+    }
+    return null;
   }
 
   /// Get videos for a category
