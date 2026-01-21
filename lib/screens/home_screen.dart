@@ -25,6 +25,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Video> _featuredVideos = [];
   bool _isLoading = true;
   bool _isAppBarTransparent = true;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -43,19 +44,38 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadData() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
 
     try {
-      // Load featured videos
-      final featured = await _api.getFeaturedVideos();
-
-      // Load categories
+      print('Loading categories...');
+      // Load categories first
       final categories = await _api.getCategories();
+      print('Got ${categories.length} categories');
 
-      // Load videos for each category
+      if (categories.isEmpty) {
+        setState(() {
+          _errorMessage = 'No categories found. Please check your connection.';
+          _isLoading = false;
+        });
+        return;
+      }
+
+      // Load featured videos
+      print('Loading featured videos...');
+      final featured = await _api.getFeaturedVideos();
+      print('Got ${featured.length} featured videos');
+
+      // Load videos for each category (limit to first 10 categories for speed)
       final videosByCategory = <int, List<Video>>{};
-      for (final category in categories) {
+      final categoriesToLoad = categories.take(10).toList();
+
+      for (final category in categoriesToLoad) {
+        print('Loading videos for category: ${category.title}');
         final videos = await _api.getVideosByCategory(category.id);
+        print('Got ${videos.length} videos');
         if (videos.isNotEmpty) {
           videosByCategory[category.id] = videos;
         }
@@ -67,9 +87,13 @@ class _HomeScreenState extends State<HomeScreen> {
         _videosByCategory = videosByCategory;
         _isLoading = false;
       });
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('Error loading data: $e');
-      setState(() => _isLoading = false);
+      print('Stack trace: $stackTrace');
+      setState(() {
+        _errorMessage = 'Failed to load content: $e';
+        _isLoading = false;
+      });
     }
   }
 
@@ -246,7 +270,30 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
+          : _errorMessage != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                        const SizedBox(height: 16),
+                        Text(
+                          _errorMessage!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.white70),
+                        ),
+                        const SizedBox(height: 24),
+                        ElevatedButton(
+                          onPressed: _loadData,
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : RefreshIndicator(
               onRefresh: _loadData,
               child: CustomScrollView(
                 controller: _scrollController,

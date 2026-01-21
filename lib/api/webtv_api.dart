@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
@@ -62,6 +63,7 @@ class WebTVApi {
   /// Get all categories
   Future<List<Category>> getCategories() async {
     final url = _buildUrl('go=categories&do=list');
+    print('Fetching categories from: $url');
 
     try {
       final response = await http.post(
@@ -71,19 +73,29 @@ class WebTVApi {
           'resultsPerPageFilter': '100',
           'current_page': '1',
         },
-      );
+      ).timeout(const Duration(seconds: 30));
+
+      print('Categories response status: ${response.statusCode}');
+      print('Categories response body (first 500 chars): ${response.body.substring(0, response.body.length > 500 ? 500 : response.body.length)}');
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+        if (data['error'] != null) {
+          print('API Error: ${data['error']} - ${data['error_long']}');
+          return [];
+        }
         if (data['list'] != null) {
-          return (data['list'] as List)
+          final categories = (data['list'] as List)
               .map((item) => Category.fromJson(item))
               .where((cat) => cat.status == '1') // Only active categories
               .toList();
+          print('Parsed ${categories.length} active categories');
+          return categories;
         }
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('Error fetching categories: $e');
+      print('Stack trace: $stackTrace');
     }
     return [];
   }
