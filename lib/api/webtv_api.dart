@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
-import 'package:http/http.dart' as http;
+import 'package:dio/dio.dart';
 import '../config/app_config.dart';
 import '../models/category.dart';
 import '../models/video.dart';
@@ -11,7 +11,24 @@ import '../models/user.dart';
 class WebTVApi {
   static final WebTVApi _instance = WebTVApi._internal();
   factory WebTVApi() => _instance;
-  WebTVApi._internal();
+
+  late Dio _dio;
+
+  WebTVApi._internal() {
+    _dio = Dio(BaseOptions(
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 30),
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'JKTV/2.0 Android',
+      },
+      // Important: follow redirects automatically
+      followRedirects: true,
+      maxRedirects: 5,
+      // Validate status to include redirects
+      validateStatus: (status) => status != null && status < 500,
+    ));
+  }
 
   String? _sessionId;
   User? _currentUser;
@@ -48,7 +65,6 @@ class WebTVApi {
   String _buildUrl(String action) {
     // Using the same static credentials that worked in the old Android app
     // These are hardcoded in the old app's ReqConst.REQ_REQUIRED
-    // Note: signature is URL-decoded (= instead of %3D)
     const timestamp = '1505628889855';
     const salt = '6273954f9c6ee2dba41fdcd6a84319fb';
     const key = 'db40ade832c4eaaa19c6c45c5bd0509b';
@@ -61,65 +77,68 @@ class WebTVApi {
         '&signature=${Uri.encodeComponent(signature)}';
   }
 
+  /// Parse response body - handles various edge cases
+  dynamic _parseResponse(Response response) {
+    var data = response.data;
+
+    // If data is already parsed (dio can do this automatically)
+    if (data is Map || data is List) {
+      return data;
+    }
+
+    // If data is a string, try to parse it
+    if (data is String) {
+      var body = data.trim();
+
+      // Try to find the start of JSON object/array
+      final jsonStart = body.indexOf('{');
+      final arrayStart = body.indexOf('[');
+
+      int startIndex = -1;
+      if (jsonStart >= 0 && (arrayStart < 0 || jsonStart < arrayStart)) {
+        startIndex = jsonStart;
+      } else if (arrayStart >= 0) {
+        startIndex = arrayStart;
+      }
+
+      if (startIndex < 0) {
+        throw Exception('No JSON found in response: ${body.substring(0, body.length.clamp(0, 100))}');
+      }
+
+      if (startIndex > 0) {
+        print('Found JSON starting at index $startIndex, stripping prefix');
+        body = body.substring(startIndex);
+      }
+
+      return json.decode(body);
+    }
+
+    throw Exception('Unexpected response type: ${data.runtimeType}');
+  }
+
   /// Get all categories
   Future<List<Category>> getCategories() async {
-    // Build URL with all parameters including includeData for full details
     final url = _buildUrl('go=categories&do=list&includeData=1&resultsPerPageFilter=100&current_page=1');
     print('Fetching categories from: $url');
 
     try {
-      // Use GET request - more reliable across different network configurations
-      final response = await http.get(
-        Uri.parse(url),
-        headers: {
-          'Accept': 'application/json',
-          'User-Agent': 'JKTV/2.0 Android',
-        },
-      ).timeout(const Duration(seconds: 30));
+      final response = await _dio.get(url);
 
       print('Categories response status: ${response.statusCode}');
       print('Categories response headers: ${response.headers}');
 
-      // Check if we got a valid response
-      if (response.body.isEmpty) {
-        throw Exception('Empty response from server');
-      }
-
-      final bodyPreview = response.body.length > 200
-          ? response.body.substring(0, 200)
-          : response.body;
-      print('Categories response body preview: $bodyPreview');
-
-      // Check for redirect (status code 3xx) - shouldn't happen with GET but handle it
-      if (response.statusCode >= 300 && response.statusCode < 400) {
-        throw Exception('Server redirected - API may have changed');
+      // Log response type and preview
+      print('Response data type: ${response.data.runtimeType}');
+      if (response.data is String) {
+        final preview = (response.data as String).length > 200
+            ? (response.data as String).substring(0, 200)
+            : response.data;
+        print('Response preview: $preview');
       }
 
       if (response.statusCode == 200) {
-        // Remove any BOM or whitespace and try to find JSON
-        var body = response.body.trim();
+        final data = _parseResponse(response);
 
-        // Try to find the start of JSON object/array
-        final jsonStart = body.indexOf('{');
-        final arrayStart = body.indexOf('[');
-
-        int startIndex = -1;
-        if (jsonStart >= 0 && (arrayStart < 0 || jsonStart < arrayStart)) {
-          startIndex = jsonStart;
-        } else if (arrayStart >= 0) {
-          startIndex = arrayStart;
-        }
-
-        if (startIndex < 0) {
-          throw Exception('No JSON found in response: ${body.substring(0, body.length.clamp(0, 100))}');
-        }
-
-        if (startIndex > 0) {
-          print('Found JSON starting at index $startIndex, stripping prefix');
-          body = body.substring(startIndex);
-        }
-
-        final data = json.decode(body);
         if (data['error'] != null) {
           print('API Error: ${data['error']} - ${data['error_long']}');
           throw Exception('API Error: ${data['error_long'] ?? data['error']}');
@@ -134,11 +153,18 @@ class WebTVApi {
         }
         throw Exception('No categories in response');
       } else {
-        throw Exception('HTTP ${response.statusCode}: ${response.reasonPhrase}');
+        throw Exception('HTTP ${response.statusCode}: ${response.statusMessage}');
       }
-    } on TimeoutException {
-      print('Request timed out');
-      throw Exception('Connection timeout - please check your internet');
+    } on DioException catch (e) {
+      print('Dio error: ${e.type} - ${e.message}');
+      if (e.type == DioExceptionType.connectionTimeout) {
+        throw Exception('Connection timeout - please check your internet');
+      } else if (e.type == DioExceptionType.receiveTimeout) {
+        throw Exception('Server took too long to respond');
+      } else if (e.response != null) {
+        throw Exception('HTTP ${e.response?.statusCode}: ${e.message}');
+      }
+      throw Exception('Network error: ${e.message}');
     } on FormatException catch (e) {
       print('JSON parse error: $e');
       throw Exception('Failed to parse server response: $e');
@@ -154,20 +180,14 @@ class WebTVApi {
     final url = _buildUrl('go=clips&do=list&fields=*&resultsPerPageFilter=$perPage&current_page=$page&categoriesFilter=$categoryId');
 
     try {
-      final response = await http.get(
-        Uri.parse(url),
-        headers: {'Accept': 'application/json'},
-      ).timeout(const Duration(seconds: 30));
+      final response = await _dio.get(url);
 
-      if (response.statusCode == 200 && response.body.isNotEmpty) {
-        final body = response.body.trim();
-        if (body.startsWith('{') || body.startsWith('[')) {
-          final data = json.decode(body);
-          if (data['list'] != null) {
-            return (data['list'] as List)
-                .map((item) => Video.fromJson(item))
-                .toList();
-          }
+      if (response.statusCode == 200) {
+        final data = _parseResponse(response);
+        if (data['list'] != null) {
+          return (data['list'] as List)
+              .map((item) => Video.fromJson(item))
+              .toList();
         }
       }
     } catch (e) {
@@ -181,20 +201,14 @@ class WebTVApi {
     final url = _buildUrl('go=clips&do=list&fields=*&resultsPerPageFilter=20&statusFilter=featuredActiveAndApproved');
 
     try {
-      final response = await http.get(
-        Uri.parse(url),
-        headers: {'Accept': 'application/json'},
-      ).timeout(const Duration(seconds: 30));
+      final response = await _dio.get(url);
 
-      if (response.statusCode == 200 && response.body.isNotEmpty) {
-        final body = response.body.trim();
-        if (body.startsWith('{') || body.startsWith('[')) {
-          final data = json.decode(body);
-          if (data['list'] != null) {
-            return (data['list'] as List)
-                .map((item) => Video.fromJson(item))
-                .toList();
-          }
+      if (response.statusCode == 200) {
+        final data = _parseResponse(response);
+        if (data['list'] != null) {
+          return (data['list'] as List)
+              .map((item) => Video.fromJson(item))
+              .toList();
         }
       }
     } catch (e) {
@@ -208,10 +222,10 @@ class WebTVApi {
     final url = _buildUrl('go=clips&do=get&iq=$videoId');
 
     try {
-      final response = await http.get(Uri.parse(url));
+      final response = await _dio.get(url);
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = _parseResponse(response);
         if (data['data'] != null) {
           final video = Video.fromJson(data['data']);
           // Get media URLs
@@ -234,20 +248,14 @@ class WebTVApi {
     final url = _buildUrl('go=clips&do=list&fields=*&resultsPerPageFilter=50&searchFilter=$encodedQuery');
 
     try {
-      final response = await http.get(
-        Uri.parse(url),
-        headers: {'Accept': 'application/json'},
-      ).timeout(const Duration(seconds: 30));
+      final response = await _dio.get(url);
 
-      if (response.statusCode == 200 && response.body.isNotEmpty) {
-        final body = response.body.trim();
-        if (body.startsWith('{') || body.startsWith('[')) {
-          final data = json.decode(body);
-          if (data['list'] != null) {
-            return (data['list'] as List)
-                .map((item) => Video.fromJson(item))
-                .toList();
-          }
+      if (response.statusCode == 200) {
+        final data = _parseResponse(response);
+        if (data['list'] != null) {
+          return (data['list'] as List)
+              .map((item) => Video.fromJson(item))
+              .toList();
         }
       }
     } catch (e) {
@@ -263,16 +271,17 @@ class WebTVApi {
     final url = _buildUrl('go=users&do=log_in');
 
     try {
-      final response = await http.post(
-        Uri.parse(url),
-        body: {
+      final response = await _dio.post(
+        url,
+        data: {
           'email': email,
           'password': password,
         },
+        options: Options(contentType: Headers.formUrlEncodedContentType),
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = _parseResponse(response);
         if (data['session_id'] != null) {
           _sessionId = data['session_id'];
           _currentUser = User.fromJson(data);
@@ -295,18 +304,19 @@ class WebTVApi {
     final url = _buildUrl('go=users&do=create');
 
     try {
-      final response = await http.post(
-        Uri.parse(url),
-        body: {
+      final response = await _dio.post(
+        url,
+        data: {
           'email': email,
           'password': password,
           'first_name': firstName,
           'last_name': lastName,
         },
+        options: Options(contentType: Headers.formUrlEncodedContentType),
       );
 
       if (response.statusCode == 200) {
-        return json.decode(response.body);
+        return _parseResponse(response);
       }
     } catch (e) {
       print('Error registering: $e');
@@ -319,7 +329,7 @@ class WebTVApi {
     if (_sessionId != null) {
       final url = _buildUrl('go=users&do=log_out&iq=$_sessionId');
       try {
-        await http.get(Uri.parse(url));
+        await _dio.get(url);
       } catch (e) {
         print('Error logging out: $e');
       }
@@ -336,15 +346,16 @@ class WebTVApi {
     final url = _buildUrl('go=store&do=list_subscriptions');
 
     try {
-      final response = await http.post(
-        Uri.parse(url),
-        body: {
+      final response = await _dio.post(
+        url,
+        data: {
           'session_id': _sessionId!,
         },
+        options: Options(contentType: Headers.formUrlEncodedContentType),
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        final data = _parseResponse(response);
         // Check if user has active subscription
         if (data['list'] != null && (data['list'] as List).isNotEmpty) {
           for (var sub in data['list']) {

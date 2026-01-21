@@ -1,7 +1,7 @@
 name: webtv_app
 description: Netflix-style VOD app for WebTV Solutions CMS
 publish_to: 'none'
-version: 2.0.7+7
+version: 2.0.8+8
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -11,6 +11,7 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.6
   http: ^1.1.0
+  dio: ^5.4.0
   crypto: ^3.0.3
   cached_network_image: ^3.3.0
   video_player: ^2.8.1
