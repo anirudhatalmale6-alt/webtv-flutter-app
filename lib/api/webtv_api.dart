@@ -48,46 +48,59 @@ class WebTVApi {
   String _buildUrl(String action) {
     // Using the same static credentials that worked in the old Android app
     // These are hardcoded in the old app's ReqConst.REQ_REQUIRED
+    // Note: signature is URL-decoded (= instead of %3D)
     const timestamp = '1505628889855';
     const salt = '6273954f9c6ee2dba41fdcd6a84319fb';
     const key = 'db40ade832c4eaaa19c6c45c5bd0509b';
-    const signature = 'DT7wO87nO41w9pjVoTH5JkBJ60JBNgqp0tOyDapNpgk%3D';
+    const signature = 'DT7wO87nO41w9pjVoTH5JkBJ60JBNgqp0tOyDapNpgk=';
 
     return '${AppConfig.apiUrl}?$action'
         '&timestamp=$timestamp'
         '&salt=$salt'
         '&key=$key'
-        '&signature=$signature';
+        '&signature=${Uri.encodeComponent(signature)}';
   }
 
   /// Get all categories
   Future<List<Category>> getCategories() async {
-    final url = _buildUrl('go=categories&do=list');
+    // Build URL with all parameters including includeData for full details
+    final url = _buildUrl('go=categories&do=list&includeData=1&resultsPerPageFilter=100&current_page=1');
     print('Fetching categories from: $url');
 
     try {
-      final response = await http.post(
+      // Use GET request - more reliable across different network configurations
+      final response = await http.get(
         Uri.parse(url),
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
           'Accept': 'application/json',
-          'User-Agent': 'JKTV-Flutter/2.0',
-        },
-        body: {
-          'includeData': '1',
-          'resultsPerPageFilter': '100',
-          'current_page': '1',
         },
       ).timeout(const Duration(seconds: 30));
 
       print('Categories response status: ${response.statusCode}');
+
+      // Check if we got a valid response
+      if (response.body.isEmpty) {
+        throw Exception('Empty response from server');
+      }
+
       final bodyPreview = response.body.length > 500
           ? response.body.substring(0, 500)
           : response.body;
       print('Categories response body (first 500 chars): $bodyPreview');
 
+      // Check for redirect (status code 3xx) - shouldn't happen with GET but handle it
+      if (response.statusCode >= 300 && response.statusCode < 400) {
+        throw Exception('Server redirected - API may have changed');
+      }
+
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+        // Verify the response looks like JSON before parsing
+        final body = response.body.trim();
+        if (!body.startsWith('{') && !body.startsWith('[')) {
+          throw Exception('Invalid response format: ${body.substring(0, body.length.clamp(0, 100))}');
+        }
+
+        final data = json.decode(body);
         if (data['error'] != null) {
           print('API Error: ${data['error']} - ${data['error_long']}');
           throw Exception('API Error: ${data['error_long'] ?? data['error']}');
@@ -106,6 +119,9 @@ class WebTVApi {
     } on TimeoutException {
       print('Request timed out');
       throw Exception('Connection timeout - please check your internet');
+    } on FormatException catch (e) {
+      print('JSON parse error: $e');
+      throw Exception('Invalid response from server');
     } catch (e, stackTrace) {
       print('Error fetching categories: $e');
       print('Stack trace: $stackTrace');
@@ -116,53 +132,50 @@ class WebTVApi {
 
   /// Get videos for a category
   Future<List<Video>> getVideosByCategory(int categoryId, {int page = 1, int perPage = 20}) async {
-    final url = _buildUrl('go=clips&do=list');
+    final url = _buildUrl('go=clips&do=list&fields=*&resultsPerPageFilter=$perPage&current_page=$page&categoriesFilter=$categoryId');
 
     try {
-      final response = await http.post(
+      final response = await http.get(
         Uri.parse(url),
-        body: {
-          'fields': '*',
-          'resultsPerPageFilter': perPage.toString(),
-          'current_page': page.toString(),
-          'categoriesFilter': categoryId.toString(),
-        },
-      );
+        headers: {'Accept': 'application/json'},
+      ).timeout(const Duration(seconds: 30));
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['list'] != null) {
-          return (data['list'] as List)
-              .map((item) => Video.fromJson(item))
-              .toList();
+      if (response.statusCode == 200 && response.body.isNotEmpty) {
+        final body = response.body.trim();
+        if (body.startsWith('{') || body.startsWith('[')) {
+          final data = json.decode(body);
+          if (data['list'] != null) {
+            return (data['list'] as List)
+                .map((item) => Video.fromJson(item))
+                .toList();
+          }
         }
       }
     } catch (e) {
-      print('Error fetching videos: $e');
+      print('Error fetching videos for category $categoryId: $e');
     }
     return [];
   }
 
   /// Get featured videos
   Future<List<Video>> getFeaturedVideos() async {
-    final url = _buildUrl('go=clips&do=list');
+    final url = _buildUrl('go=clips&do=list&fields=*&resultsPerPageFilter=20&statusFilter=featuredActiveAndApproved');
 
     try {
-      final response = await http.post(
+      final response = await http.get(
         Uri.parse(url),
-        body: {
-          'fields': '*',
-          'resultsPerPageFilter': '20',
-          'statusFilter': 'featuredActiveAndApproved',
-        },
-      );
+        headers: {'Accept': 'application/json'},
+      ).timeout(const Duration(seconds: 30));
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['list'] != null) {
-          return (data['list'] as List)
-              .map((item) => Video.fromJson(item))
-              .toList();
+      if (response.statusCode == 200 && response.body.isNotEmpty) {
+        final body = response.body.trim();
+        if (body.startsWith('{') || body.startsWith('[')) {
+          final data = json.decode(body);
+          if (data['list'] != null) {
+            return (data['list'] as List)
+                .map((item) => Video.fromJson(item))
+                .toList();
+          }
         }
       }
     } catch (e) {
@@ -198,24 +211,24 @@ class WebTVApi {
 
   /// Search videos
   Future<List<Video>> searchVideos(String query) async {
-    final url = _buildUrl('go=clips&do=list');
+    final encodedQuery = Uri.encodeComponent(query);
+    final url = _buildUrl('go=clips&do=list&fields=*&resultsPerPageFilter=50&searchFilter=$encodedQuery');
 
     try {
-      final response = await http.post(
+      final response = await http.get(
         Uri.parse(url),
-        body: {
-          'fields': '*',
-          'resultsPerPageFilter': '50',
-          'searchFilter': query,
-        },
-      );
+        headers: {'Accept': 'application/json'},
+      ).timeout(const Duration(seconds: 30));
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['list'] != null) {
-          return (data['list'] as List)
-              .map((item) => Video.fromJson(item))
-              .toList();
+      if (response.statusCode == 200 && response.body.isNotEmpty) {
+        final body = response.body.trim();
+        if (body.startsWith('{') || body.startsWith('[')) {
+          final data = json.decode(body);
+          if (data['list'] != null) {
+            return (data['list'] as List)
+                .map((item) => Video.fromJson(item))
+                .toList();
+          }
         }
       }
     } catch (e) {
