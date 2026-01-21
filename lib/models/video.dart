@@ -17,6 +17,7 @@ class Video {
   final bool isLive;
   final String videoType; // 'youtube', 'vimeo', 'direct', 'embed'
   final String? youtubeId;
+  final String? vimeoId;
   final String? embedUrl;
 
   Video({
@@ -38,6 +39,7 @@ class Video {
     this.isLive = false,
     this.videoType = 'direct',
     this.youtubeId,
+    this.vimeoId,
     this.embedUrl,
   });
 
@@ -47,6 +49,7 @@ class Video {
     // Determine video type and extract URLs
     String videoType = 'direct';
     String? youtubeId;
+    String? vimeoId;
     String? embedUrl;
     String? mediaUrl;
 
@@ -74,19 +77,25 @@ class Video {
         youtubeId = _extractYouTubeId(embedUrl);
         if (youtubeId != null) {
           videoType = 'youtube';
-        } else if (embedUrl.contains('vimeo')) {
-          videoType = 'vimeo';
         } else {
-          videoType = 'embed';
+          vimeoId = _extractVimeoId(embedUrl);
+          if (vimeoId != null) {
+            videoType = 'vimeo';
+          } else {
+            videoType = 'embed';
+          }
         }
       }
     }
 
-    // Also check id_import for YouTube ID
+    // Also check id_import for YouTube/Vimeo ID
     final idImport = json['id_import']?.toString() ?? '';
     if (idImport.startsWith('yt_') && youtubeId == null) {
       youtubeId = idImport.substring(3);
       videoType = 'youtube';
+    } else if (idImport.startsWith('vim_') && vimeoId == null) {
+      vimeoId = idImport.substring(4);
+      videoType = 'vimeo';
     }
 
     return Video(
@@ -108,6 +117,7 @@ class Video {
       isLive: titleUrl.toLowerCase().contains('live'),
       videoType: videoType,
       youtubeId: youtubeId,
+      vimeoId: vimeoId,
       embedUrl: embedUrl,
     );
   }
@@ -120,6 +130,26 @@ class Video {
       RegExp(r'youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})'),
       RegExp(r'youtube\.com/embed/([a-zA-Z0-9_-]{11})'),
       RegExp(r'youtube\.com/v/([a-zA-Z0-9_-]{11})'),
+    ];
+
+    for (final pattern in patterns) {
+      final match = pattern.firstMatch(url);
+      if (match != null) {
+        return match.group(1);
+      }
+    }
+    return null;
+  }
+
+  /// Extract Vimeo video ID from various URL formats
+  static String? _extractVimeoId(String url) {
+    // Handle various Vimeo URL formats
+    final patterns = [
+      RegExp(r'vimeo\.com/(\d+)'),
+      RegExp(r'vimeo\.com/video/(\d+)'),
+      RegExp(r'player\.vimeo\.com/video/(\d+)'),
+      RegExp(r'vimeo\.com/channels/[^/]+/(\d+)'),
+      RegExp(r'vimeo\.com/groups/[^/]+/videos/(\d+)'),
     ];
 
     for (final pattern in patterns) {

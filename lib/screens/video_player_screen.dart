@@ -23,6 +23,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   bool _isLoading = true;
   String? _error;
   bool _isYouTube = false;
+  bool _isVimeo = false;
 
   @override
   void initState() {
@@ -34,6 +35,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     try {
       print('Video type: ${widget.video.videoType}');
       print('YouTube ID: ${widget.video.youtubeId}');
+      print('Vimeo ID: ${widget.video.vimeoId}');
       print('Media URL: ${widget.video.mediaUrl}');
       print('Embed URL: ${widget.video.embedUrl}');
 
@@ -43,11 +45,17 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           _isYouTube = true;
           _isLoading = false;
         });
+      } else if (widget.video.videoType == 'vimeo') {
+        // For Vimeo videos, show a play button that opens in Vimeo app
+        setState(() {
+          _isVimeo = true;
+          _isLoading = false;
+        });
       } else if (widget.video.mediaUrl != null && widget.video.mediaUrl!.isNotEmpty) {
         // Initialize native video player for direct URLs
         await _initializeNativePlayer(widget.video.mediaUrl!);
       } else if (widget.video.embedUrl != null && widget.video.embedUrl!.isNotEmpty) {
-        // Try to extract YouTube ID from embed URL as fallback
+        // Try to extract YouTube/Vimeo ID from embed URL as fallback
         final youtubeId = _extractYouTubeId(widget.video.embedUrl!);
         if (youtubeId != null) {
           setState(() {
@@ -55,10 +63,18 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             _isLoading = false;
           });
         } else {
-          setState(() {
-            _error = 'No playable video URL available';
-            _isLoading = false;
-          });
+          final vimeoId = _extractVimeoId(widget.video.embedUrl!);
+          if (vimeoId != null) {
+            setState(() {
+              _isVimeo = true;
+              _isLoading = false;
+            });
+          } else {
+            setState(() {
+              _error = 'No playable video URL available';
+              _isLoading = false;
+            });
+          }
         }
       } else {
         setState(() {
@@ -102,17 +118,64 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     return null;
   }
 
+  String? _extractVimeoId(String url) {
+    final patterns = [
+      RegExp(r'vimeo\.com/(\d+)'),
+      RegExp(r'vimeo\.com/video/(\d+)'),
+      RegExp(r'player\.vimeo\.com/video/(\d+)'),
+    ];
+
+    for (final pattern in patterns) {
+      final match = pattern.firstMatch(url);
+      if (match != null) {
+        return match.group(1);
+      }
+    }
+    return null;
+  }
+
+  String? _getVimeoId() {
+    if (widget.video.vimeoId != null) {
+      return widget.video.vimeoId;
+    }
+    if (widget.video.embedUrl != null) {
+      return _extractVimeoId(widget.video.embedUrl!);
+    }
+    return null;
+  }
+
+  void _openInVimeoApp() async {
+    final vimeoId = _getVimeoId();
+    if (vimeoId != null) {
+      // Try Vimeo app first, then fall back to browser
+      final vimeoAppUrl = 'vimeo://app.vimeo.com/videos/$vimeoId';
+      final vimeoWebUrl = 'https://vimeo.com/$vimeoId';
+
+      try {
+        // Try to open in Vimeo app
+        final appUri = Uri.parse(vimeoAppUrl);
+        if (await canLaunchUrl(appUri)) {
+          await launchUrl(appUri);
+          return;
+        }
+      } catch (e) {
+        print('Could not open Vimeo app: $e');
+      }
+
+      // Fall back to browser
+      final webUri = Uri.parse(vimeoWebUrl);
+      if (await canLaunchUrl(webUri)) {
+        await launchUrl(webUri, mode: LaunchMode.externalApplication);
+      }
+    }
+  }
+
   Future<void> _initializeNativePlayer(String videoUrl) async {
     try {
       String actualUrl = videoUrl;
 
-      // Handle Vimeo URLs
-      if (videoUrl.contains('vimeo.com') && !videoUrl.contains('.m3u8')) {
-        final vimeoId = _extractVimeoId(videoUrl);
-        if (vimeoId != null) {
-          actualUrl = await _getVimeoStreamUrl(vimeoId) ?? videoUrl;
-        }
-      }
+      // Note: Vimeo videos are now handled via _isVimeo flag and open in Vimeo app
+      // Direct stream URLs (m3u8, mp4) will play natively
 
       _videoController = VideoPlayerController.networkUrl(Uri.parse(actualUrl));
 
@@ -166,17 +229,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     }
   }
 
-  String? _extractVimeoId(String url) {
-    final regex = RegExp(r'vimeo\.com/(\d+)');
-    final match = regex.firstMatch(url);
-    return match?.group(1);
-  }
-
-  Future<String?> _getVimeoStreamUrl(String vimeoId) async {
-    // TODO: Implement Vimeo config API call
-    return null;
-  }
-
   void _openInYouTubeApp() async {
     final youtubeId = _getYouTubeId();
     if (youtubeId != null) {
@@ -226,6 +278,12 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
               onPressed: _openInYouTubeApp,
               tooltip: 'Open in YouTube',
             ),
+          if (_isVimeo)
+            IconButton(
+              icon: const Icon(Icons.open_in_new),
+              onPressed: _openInVimeoApp,
+              tooltip: 'Open in Vimeo',
+            ),
         ],
       ),
       body: _buildBody(),
@@ -245,6 +303,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
     if (_isYouTube) {
       return _buildYouTubeView();
+    }
+
+    if (_isVimeo) {
+      return _buildVimeoView();
     }
 
     return Column(
@@ -349,6 +411,103 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           child: _buildVideoInfo(),
         ),
       ],
+    );
+  }
+
+  Widget _buildVimeoView() {
+    return Column(
+      children: [
+        // Vimeo thumbnail with play button overlay
+        AspectRatio(
+          aspectRatio: 16 / 9,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Thumbnail - use poster image or Vimeo thumbnail
+              Container(
+                color: Colors.black,
+                child: widget.video.poster.isNotEmpty
+                    ? Image.network(
+                        widget.video.poster,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        errorBuilder: (context, error, stackTrace) =>
+                            _buildVimeoThumbnail(),
+                      )
+                    : _buildVimeoThumbnail(),
+              ),
+              // Play button overlay
+              GestureDetector(
+                onTap: _openInVimeoApp,
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1AB7EA), // Vimeo blue
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Icon(
+                    Icons.play_arrow,
+                    size: 48,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              // Vimeo logo
+              Positioned(
+                bottom: 16,
+                right: 16,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1AB7EA), // Vimeo blue
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text(
+                    'Vimeo',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Tap to play message
+        Container(
+          padding: const EdgeInsets.all(16),
+          color: Colors.grey[900],
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.touch_app, color: Colors.white70),
+              const SizedBox(width: 8),
+              const Text(
+                'Tap to play on Vimeo',
+                style: TextStyle(color: Colors.white70),
+              ),
+            ],
+          ),
+        ),
+
+        // Video info
+        Expanded(
+          child: _buildVideoInfo(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildVimeoThumbnail() {
+    // Vimeo thumbnails require API call, so use a placeholder
+    return Container(
+      color: Colors.grey[900],
+      child: const Center(
+        child: Icon(Icons.video_library, size: 64, color: Color(0xFF1AB7EA)),
+      ),
     );
   }
 
