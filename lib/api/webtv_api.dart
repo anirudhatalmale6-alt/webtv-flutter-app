@@ -42,17 +42,11 @@ class WebTVApi {
     return base64.encode(digest.bytes);
   }
 
-  /// Build authenticated URL
+  /// Build API URL (authentication not required for public endpoints)
   String _buildUrl(String action) {
-    final timestamp = _getTimestamp();
-    final salt = _getSalt();
-    final signature = Uri.encodeComponent(_getSignature(salt, timestamp));
-
-    return '${AppConfig.apiUrl}?$action'
-        '&timestamp=$timestamp'
-        '&salt=$salt'
-        '&key=${AppConfig.apiKey}'
-        '&signature=$signature';
+    // WebTV Solutions API doesn't require authentication for public endpoints
+    // The old app used static/hardcoded credentials
+    return '${AppConfig.apiUrl}?$action';
   }
 
   /// Get all categories

@@ -38,21 +38,21 @@ class Video {
   factory Video.fromJson(Map<String, dynamic> json) {
     final titleUrl = json['title_url']?.toString() ?? '';
     return Video(
-      id: json['id'] ?? 0,
-      title: json['title'] ?? '',
+      id: int.tryParse(json['id']?.toString() ?? '0') ?? 0,
+      title: json['title']?.toString() ?? '',
       titleUrl: titleUrl,
-      description: _stripHtml(json['description'] ?? ''),
-      thumbnail: json['img_thumbnail'] ?? '',
-      poster: json['img_poster'] ?? json['img_thumbnail'] ?? '',
+      description: _stripHtml(json['description']?.toString() ?? ''),
+      thumbnail: json['img_thumbnail']?.toString() ?? '',
+      poster: json['img_poster']?.toString() ?? json['img_thumbnail']?.toString() ?? '',
       duration: json['duration']?.toString() ?? '0',
-      durationFormatted: json['duration_formatted'] ?? '',
+      durationFormatted: json['duration_formatted']?.toString() ?? '',
       views: int.tryParse(json['views']?.toString() ?? '0') ?? 0,
       likes: int.tryParse(json['likes']?.toString() ?? '0') ?? 0,
-      date: json['date'] ?? '',
-      dateFormatted: json['date_formatted'] ?? '',
-      author: json['user_alias'] ?? '',
-      categoryId: json['id_category'] ?? 0,
-      mediaUrl: json['live_ios'] ?? json['media_mbr_html5'] ?? json['embed_flash'],
+      date: json['date']?.toString() ?? '',
+      dateFormatted: json['date_formatted']?.toString() ?? '',
+      author: json['user_alias']?.toString() ?? '',
+      categoryId: int.tryParse(json['id_category']?.toString() ?? '0') ?? 0,
+      mediaUrl: json['live_ios']?.toString() ?? json['media_mbr_html5']?.toString() ?? json['embed_flash']?.toString(),
       isLive: titleUrl.toLowerCase().contains('live'),
     );
   }
