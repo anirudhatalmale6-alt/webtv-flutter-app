@@ -14,8 +14,8 @@ class AppConfig {
   /// Site identifier: 'jammukashmir', 'raplay', 'fcplay'
   static const String siteId = 'jammukashmir';
 
-  /// API base URL
-  static const String apiBaseUrl = 'https://jammukashmir.tv';
+  /// API base URL (using HTTP like the original app)
+  static const String apiBaseUrl = 'http://jammukashmir.tv';
 
   /// App display name
   static const String appName = 'JKTV';
@@ -69,7 +69,7 @@ class AppConfig {
 class SiteConfigs {
   static const jammukashmir = {
     'siteId': 'jammukashmir',
-    'apiBaseUrl': 'https://jammukashmir.tv',
+    'apiBaseUrl': 'http://jammukashmir.tv',
     'appName': 'JKTV',
     'appTagline': 'Kashmir\'s First Independent WebTV',
     'primaryColor': 0xFF1E88E5,
