@@ -42,11 +42,21 @@ class WebTVApi {
     return base64.encode(digest.bytes);
   }
 
-  /// Build API URL (authentication not required for public endpoints)
+  /// Build API URL with authentication credentials
+  /// The WebTV Solutions API requires these auth parameters
   String _buildUrl(String action) {
-    // WebTV Solutions API doesn't require authentication for public endpoints
-    // The old app used static/hardcoded credentials
-    return '${AppConfig.apiUrl}?$action';
+    // Using the same static credentials that worked in the old Android app
+    // These are hardcoded in the old app's ReqConst.REQ_REQUIRED
+    const timestamp = '1505628889855';
+    const salt = '6273954f9c6ee2dba41fdcd6a84319fb';
+    const key = 'db40ade832c4eaaa19c6c45c5bd0509b';
+    const signature = 'DT7wO87nO41w9pjVoTH5JkBJ60JBNgqp0tOyDapNpgk%3D';
+
+    return '${AppConfig.apiUrl}?$action'
+        '&timestamp=$timestamp'
+        '&salt=$salt'
+        '&key=$key'
+        '&signature=$signature';
   }
 
   /// Get all categories
