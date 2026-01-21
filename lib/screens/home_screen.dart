@@ -52,12 +52,22 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       print('Loading categories...');
       // Load categories first
-      final categories = await _api.getCategories();
-      print('Got ${categories.length} categories');
+      List<Category> categories = [];
+      try {
+        categories = await _api.getCategories();
+        print('Got ${categories.length} categories');
+      } catch (e) {
+        print('Categories error: $e');
+        setState(() {
+          _errorMessage = 'Failed to load categories: $e';
+          _isLoading = false;
+        });
+        return;
+      }
 
       if (categories.isEmpty) {
         setState(() {
-          _errorMessage = 'No categories found. Please check your connection.';
+          _errorMessage = 'No categories found. The API may be down or your connection blocked.';
           _isLoading = false;
         });
         return;
@@ -293,7 +303,36 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 )
-              : RefreshIndicator(
+              : (_categories.isEmpty && _featuredVideos.isEmpty)
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.video_library_outlined, size: 64, color: Colors.white54),
+                            const SizedBox(height: 16),
+                            const Text(
+                              'No content available',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Colors.white70, fontSize: 18),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Pull down to refresh or tap retry',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Colors.white38),
+                            ),
+                            const SizedBox(height: 24),
+                            ElevatedButton(
+                              onPressed: _loadData,
+                              child: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : RefreshIndicator(
               onRefresh: _loadData,
               child: CustomScrollView(
                 controller: _scrollController,

@@ -68,6 +68,11 @@ class WebTVApi {
     try {
       final response = await http.post(
         Uri.parse(url),
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Accept': 'application/json',
+          'User-Agent': 'JKTV-Flutter/2.0',
+        },
         body: {
           'includeData': '1',
           'resultsPerPageFilter': '100',
@@ -76,13 +81,16 @@ class WebTVApi {
       ).timeout(const Duration(seconds: 30));
 
       print('Categories response status: ${response.statusCode}');
-      print('Categories response body (first 500 chars): ${response.body.substring(0, response.body.length > 500 ? 500 : response.body.length)}');
+      final bodyPreview = response.body.length > 500
+          ? response.body.substring(0, 500)
+          : response.body;
+      print('Categories response body (first 500 chars): $bodyPreview');
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['error'] != null) {
           print('API Error: ${data['error']} - ${data['error_long']}');
-          return [];
+          throw Exception('API Error: ${data['error_long'] ?? data['error']}');
         }
         if (data['list'] != null) {
           final categories = (data['list'] as List)
@@ -92,10 +100,16 @@ class WebTVApi {
           print('Parsed ${categories.length} active categories');
           return categories;
         }
+      } else {
+        throw Exception('HTTP ${response.statusCode}: ${response.reasonPhrase}');
       }
+    } on TimeoutException {
+      print('Request timed out');
+      throw Exception('Connection timeout - please check your internet');
     } catch (e, stackTrace) {
       print('Error fetching categories: $e');
       print('Stack trace: $stackTrace');
+      rethrow;
     }
     return [];
   }
