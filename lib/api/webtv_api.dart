@@ -73,20 +73,22 @@ class WebTVApi {
         Uri.parse(url),
         headers: {
           'Accept': 'application/json',
+          'User-Agent': 'JKTV/2.0 Android',
         },
       ).timeout(const Duration(seconds: 30));
 
       print('Categories response status: ${response.statusCode}');
+      print('Categories response headers: ${response.headers}');
 
       // Check if we got a valid response
       if (response.body.isEmpty) {
         throw Exception('Empty response from server');
       }
 
-      final bodyPreview = response.body.length > 500
-          ? response.body.substring(0, 500)
+      final bodyPreview = response.body.length > 200
+          ? response.body.substring(0, 200)
           : response.body;
-      print('Categories response body (first 500 chars): $bodyPreview');
+      print('Categories response body preview: $bodyPreview');
 
       // Check for redirect (status code 3xx) - shouldn't happen with GET but handle it
       if (response.statusCode >= 300 && response.statusCode < 400) {
@@ -94,10 +96,27 @@ class WebTVApi {
       }
 
       if (response.statusCode == 200) {
-        // Verify the response looks like JSON before parsing
-        final body = response.body.trim();
-        if (!body.startsWith('{') && !body.startsWith('[')) {
-          throw Exception('Invalid response format: ${body.substring(0, body.length.clamp(0, 100))}');
+        // Remove any BOM or whitespace and try to find JSON
+        var body = response.body.trim();
+
+        // Try to find the start of JSON object/array
+        final jsonStart = body.indexOf('{');
+        final arrayStart = body.indexOf('[');
+
+        int startIndex = -1;
+        if (jsonStart >= 0 && (arrayStart < 0 || jsonStart < arrayStart)) {
+          startIndex = jsonStart;
+        } else if (arrayStart >= 0) {
+          startIndex = arrayStart;
+        }
+
+        if (startIndex < 0) {
+          throw Exception('No JSON found in response: ${body.substring(0, body.length.clamp(0, 100))}');
+        }
+
+        if (startIndex > 0) {
+          print('Found JSON starting at index $startIndex, stripping prefix');
+          body = body.substring(startIndex);
         }
 
         final data = json.decode(body);
@@ -113,6 +132,7 @@ class WebTVApi {
           print('Parsed ${categories.length} active categories');
           return categories;
         }
+        throw Exception('No categories in response');
       } else {
         throw Exception('HTTP ${response.statusCode}: ${response.reasonPhrase}');
       }
@@ -121,13 +141,12 @@ class WebTVApi {
       throw Exception('Connection timeout - please check your internet');
     } on FormatException catch (e) {
       print('JSON parse error: $e');
-      throw Exception('Invalid response from server');
+      throw Exception('Failed to parse server response: $e');
     } catch (e, stackTrace) {
       print('Error fetching categories: $e');
       print('Stack trace: $stackTrace');
       rethrow;
     }
-    return [];
   }
 
   /// Get videos for a category
