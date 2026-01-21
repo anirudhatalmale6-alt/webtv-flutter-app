@@ -15,6 +15,9 @@ class Video {
   final int categoryId;
   String? mediaUrl;
   final bool isLive;
+  final String videoType; // 'youtube', 'vimeo', 'direct', 'embed'
+  final String? youtubeId;
+  final String? embedUrl;
 
   Video({
     required this.id,
@@ -33,10 +36,59 @@ class Video {
     required this.categoryId,
     this.mediaUrl,
     this.isLive = false,
+    this.videoType = 'direct',
+    this.youtubeId,
+    this.embedUrl,
   });
 
   factory Video.fromJson(Map<String, dynamic> json) {
     final titleUrl = json['title_url']?.toString() ?? '';
+
+    // Determine video type and extract URLs
+    String videoType = 'direct';
+    String? youtubeId;
+    String? embedUrl;
+    String? mediaUrl;
+
+    // Check for direct stream URLs first
+    final liveIos = json['live_ios']?.toString() ?? '';
+    final mediaMbrHtml5 = json['media_mbr_html5']?.toString() ?? '';
+    final vodHtml5H264 = json['vod_html5_h264']?.toString() ?? '';
+
+    if (liveIos.isNotEmpty && liveIos != 'null') {
+      mediaUrl = liveIos;
+      videoType = 'direct';
+    } else if (mediaMbrHtml5.isNotEmpty && mediaMbrHtml5 != 'null') {
+      mediaUrl = mediaMbrHtml5;
+      videoType = 'direct';
+    } else if (vodHtml5H264.isNotEmpty && vodHtml5H264 != 'null') {
+      mediaUrl = vodHtml5H264;
+      videoType = 'direct';
+    } else {
+      // Check for embed URLs (YouTube, etc.)
+      final embedFlash = json['embed_flash']?.toString() ?? '';
+      final embedHtml5 = json['embed_html5']?.toString() ?? '';
+      embedUrl = embedHtml5.isNotEmpty ? embedHtml5 : embedFlash;
+
+      if (embedUrl.isNotEmpty && embedUrl != 'null') {
+        youtubeId = _extractYouTubeId(embedUrl);
+        if (youtubeId != null) {
+          videoType = 'youtube';
+        } else if (embedUrl.contains('vimeo')) {
+          videoType = 'vimeo';
+        } else {
+          videoType = 'embed';
+        }
+      }
+    }
+
+    // Also check id_import for YouTube ID
+    final idImport = json['id_import']?.toString() ?? '';
+    if (idImport.startsWith('yt_') && youtubeId == null) {
+      youtubeId = idImport.substring(3);
+      videoType = 'youtube';
+    }
+
     return Video(
       id: int.tryParse(json['id']?.toString() ?? '0') ?? 0,
       title: json['title']?.toString() ?? '',
@@ -52,9 +104,31 @@ class Video {
       dateFormatted: json['date_formatted']?.toString() ?? '',
       author: json['user_alias']?.toString() ?? '',
       categoryId: int.tryParse(json['id_category']?.toString() ?? '0') ?? 0,
-      mediaUrl: json['live_ios']?.toString() ?? json['media_mbr_html5']?.toString() ?? json['embed_flash']?.toString(),
+      mediaUrl: mediaUrl,
       isLive: titleUrl.toLowerCase().contains('live'),
+      videoType: videoType,
+      youtubeId: youtubeId,
+      embedUrl: embedUrl,
     );
+  }
+
+  /// Extract YouTube video ID from various URL formats
+  static String? _extractYouTubeId(String url) {
+    // Handle various YouTube URL formats
+    final patterns = [
+      RegExp(r'youtu\.be/([a-zA-Z0-9_-]{11})'),
+      RegExp(r'youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})'),
+      RegExp(r'youtube\.com/embed/([a-zA-Z0-9_-]{11})'),
+      RegExp(r'youtube\.com/v/([a-zA-Z0-9_-]{11})'),
+    ];
+
+    for (final pattern in patterns) {
+      final match = pattern.firstMatch(url);
+      if (match != null) {
+        return match.group(1);
+      }
+    }
+    return null;
   }
 
   Map<String, dynamic> toJson() {

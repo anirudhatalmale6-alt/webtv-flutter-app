@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/video.dart';
 import '../config/app_config.dart';
 
@@ -15,10 +16,13 @@ class VideoPlayerScreen extends StatefulWidget {
 }
 
 class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
+  // For direct video playback
   VideoPlayerController? _videoController;
   ChewieController? _chewieController;
+
   bool _isLoading = true;
   String? _error;
+  bool _isYouTube = false;
 
   @override
   void initState() {
@@ -28,19 +32,82 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
   Future<void> _initializePlayer() async {
     try {
-      final videoUrl = widget.video.mediaUrl;
-      if (videoUrl == null || videoUrl.isEmpty) {
+      print('Video type: ${widget.video.videoType}');
+      print('YouTube ID: ${widget.video.youtubeId}');
+      print('Media URL: ${widget.video.mediaUrl}');
+      print('Embed URL: ${widget.video.embedUrl}');
+
+      if (widget.video.videoType == 'youtube' && widget.video.youtubeId != null) {
+        // For YouTube videos, show a play button that opens in YouTube app
+        setState(() {
+          _isYouTube = true;
+          _isLoading = false;
+        });
+      } else if (widget.video.mediaUrl != null && widget.video.mediaUrl!.isNotEmpty) {
+        // Initialize native video player for direct URLs
+        await _initializeNativePlayer(widget.video.mediaUrl!);
+      } else if (widget.video.embedUrl != null && widget.video.embedUrl!.isNotEmpty) {
+        // Try to extract YouTube ID from embed URL as fallback
+        final youtubeId = _extractYouTubeId(widget.video.embedUrl!);
+        if (youtubeId != null) {
+          setState(() {
+            _isYouTube = true;
+            _isLoading = false;
+          });
+        } else {
+          setState(() {
+            _error = 'No playable video URL available';
+            _isLoading = false;
+          });
+        }
+      } else {
         setState(() {
           _error = 'No video URL available';
           _isLoading = false;
         });
-        return;
       }
+    } catch (e) {
+      print('Error initializing player: $e');
+      setState(() {
+        _error = 'Failed to load video: $e';
+        _isLoading = false;
+      });
+    }
+  }
+
+  String? _extractYouTubeId(String url) {
+    final patterns = [
+      RegExp(r'youtu\.be/([a-zA-Z0-9_-]{11})'),
+      RegExp(r'youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})'),
+      RegExp(r'youtube\.com/embed/([a-zA-Z0-9_-]{11})'),
+      RegExp(r'youtube\.com/v/([a-zA-Z0-9_-]{11})'),
+    ];
+
+    for (final pattern in patterns) {
+      final match = pattern.firstMatch(url);
+      if (match != null) {
+        return match.group(1);
+      }
+    }
+    return null;
+  }
+
+  String? _getYouTubeId() {
+    if (widget.video.youtubeId != null) {
+      return widget.video.youtubeId;
+    }
+    if (widget.video.embedUrl != null) {
+      return _extractYouTubeId(widget.video.embedUrl!);
+    }
+    return null;
+  }
+
+  Future<void> _initializeNativePlayer(String videoUrl) async {
+    try {
+      String actualUrl = videoUrl;
 
       // Handle Vimeo URLs
-      String actualUrl = videoUrl;
       if (videoUrl.contains('vimeo.com') && !videoUrl.contains('.m3u8')) {
-        // Extract Vimeo video ID and get config
         final vimeoId = _extractVimeoId(videoUrl);
         if (vimeoId != null) {
           actualUrl = await _getVimeoStreamUrl(vimeoId) ?? videoUrl;
@@ -91,7 +158,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
       setState(() => _isLoading = false);
     } catch (e) {
-      print('Error initializing player: $e');
+      print('Error initializing native player: $e');
       setState(() {
         _error = 'Failed to load video: $e';
         _isLoading = false;
@@ -100,7 +167,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   }
 
   String? _extractVimeoId(String url) {
-    // Extract Vimeo ID from URL
     final regex = RegExp(r'vimeo\.com/(\d+)');
     final match = regex.firstMatch(url);
     return match?.group(1);
@@ -108,8 +174,33 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
   Future<String?> _getVimeoStreamUrl(String vimeoId) async {
     // TODO: Implement Vimeo config API call
-    // This would fetch the actual stream URL from Vimeo
     return null;
+  }
+
+  void _openInYouTubeApp() async {
+    final youtubeId = _getYouTubeId();
+    if (youtubeId != null) {
+      // Try YouTube app first, then fall back to browser
+      final youtubeAppUrl = 'vnd.youtube://$youtubeId';
+      final youtubeWebUrl = 'https://www.youtube.com/watch?v=$youtubeId';
+
+      try {
+        // Try to open in YouTube app
+        final appUri = Uri.parse(youtubeAppUrl);
+        if (await canLaunchUrl(appUri)) {
+          await launchUrl(appUri);
+          return;
+        }
+      } catch (e) {
+        print('Could not open YouTube app: $e');
+      }
+
+      // Fall back to browser
+      final webUri = Uri.parse(youtubeWebUrl);
+      if (await canLaunchUrl(webUri)) {
+        await launchUrl(webUri, mode: LaunchMode.externalApplication);
+      }
+    }
   }
 
   @override
@@ -128,6 +219,14 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
+        actions: [
+          if (_isYouTube)
+            IconButton(
+              icon: const Icon(Icons.open_in_new),
+              onPressed: _openInYouTubeApp,
+              tooltip: 'Open in YouTube',
+            ),
+        ],
       ),
       body: _buildBody(),
     );
@@ -141,34 +240,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     }
 
     if (_error != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.error_outline, color: Colors.red, size: 64),
-              const SizedBox(height: 16),
-              Text(
-                _error!,
-                style: const TextStyle(color: Colors.white70),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: () {
-                  setState(() {
-                    _isLoading = true;
-                    _error = null;
-                  });
-                  _initializePlayer();
-                },
-                child: const Text('Retry'),
-              ),
-            ],
-          ),
-        ),
-      );
+      return _buildErrorView();
+    }
+
+    if (_isYouTube) {
+      return _buildYouTubeView();
     }
 
     return Column(
@@ -183,92 +259,249 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
         // Video info
         Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.video.title,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
+          child: _buildVideoInfo(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildYouTubeView() {
+    return Column(
+      children: [
+        // YouTube thumbnail with play button overlay
+        AspectRatio(
+          aspectRatio: 16 / 9,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Thumbnail
+              Container(
+                color: Colors.black,
+                child: widget.video.poster.isNotEmpty
+                    ? Image.network(
+                        widget.video.poster,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        errorBuilder: (context, error, stackTrace) =>
+                            _buildYouTubeThumbnail(),
+                      )
+                    : _buildYouTubeThumbnail(),
+              ),
+              // Play button overlay
+              GestureDetector(
+                onTap: _openInYouTubeApp,
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Icon(
+                    Icons.play_arrow,
+                    size: 48,
                     color: Colors.white,
                   ),
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    if (widget.video.dateFormatted.isNotEmpty) ...[
-                      const Icon(Icons.calendar_today,
-                          size: 14, color: Colors.white54),
-                      const SizedBox(width: 4),
-                      Text(
-                        widget.video.dateFormatted,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.white54,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                    ],
-                    const Icon(Icons.visibility, size: 14, color: Colors.white54),
-                    const SizedBox(width: 4),
-                    Text(
-                      widget.video.formattedViews,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.white54,
-                      ),
+              ),
+              // YouTube logo
+              Positioned(
+                bottom: 16,
+                right: 16,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text(
+                    'YouTube',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
                     ),
-                    if (widget.video.likes > 0) ...[
-                      const SizedBox(width: 16),
-                      const Icon(Icons.thumb_up, size: 14, color: Colors.white54),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${widget.video.likes}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.white54,
-                        ),
-                      ),
-                    ],
-                  ],
+                  ),
                 ),
-                if (widget.video.author.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      const Icon(Icons.person, size: 16, color: Colors.white54),
-                      const SizedBox(width: 8),
-                      Text(
-                        widget.video.author,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Colors.white70,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-                if (widget.video.description.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  const Divider(color: Colors.white24),
-                  const SizedBox(height: 16),
-                  Text(
-                    widget.video.description,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Colors.white70,
-                      height: 1.5,
-                    ),
-                  ),
-                ],
-              ],
-            ),
+              ),
+            ],
           ),
         ),
+
+        // Tap to play message
+        Container(
+          padding: const EdgeInsets.all(16),
+          color: Colors.grey[900],
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.touch_app, color: Colors.white70),
+              const SizedBox(width: 8),
+              const Text(
+                'Tap to play on YouTube',
+                style: TextStyle(color: Colors.white70),
+              ),
+            ],
+          ),
+        ),
+
+        // Video info
+        Expanded(
+          child: _buildVideoInfo(),
+        ),
       ],
+    );
+  }
+
+  Widget _buildYouTubeThumbnail() {
+    final youtubeId = _getYouTubeId();
+    if (youtubeId != null) {
+      return Image.network(
+        'https://img.youtube.com/vi/$youtubeId/hqdefault.jpg',
+        fit: BoxFit.cover,
+        width: double.infinity,
+        errorBuilder: (context, error, stackTrace) => Container(
+          color: Colors.grey[900],
+          child: const Center(
+            child: Icon(Icons.video_library, size: 64, color: Colors.white54),
+          ),
+        ),
+      );
+    }
+    return Container(
+      color: Colors.grey[900],
+      child: const Center(
+        child: Icon(Icons.video_library, size: 64, color: Colors.white54),
+      ),
+    );
+  }
+
+  Widget _buildErrorView() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, color: Colors.red, size: 64),
+            const SizedBox(height: 16),
+            Text(
+              _error!,
+              style: const TextStyle(color: Colors.white70),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  _isLoading = true;
+                  _error = null;
+                });
+                _initializePlayer();
+              },
+              child: const Text('Retry'),
+            ),
+            if (widget.video.embedUrl != null) ...[
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () async {
+                  if (await canLaunchUrl(Uri.parse(widget.video.embedUrl!))) {
+                    await launchUrl(Uri.parse(widget.video.embedUrl!),
+                        mode: LaunchMode.externalApplication);
+                  }
+                },
+                child: const Text('Open in Browser'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVideoInfo() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            widget.video.title,
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              if (widget.video.dateFormatted.isNotEmpty) ...[
+                const Icon(Icons.calendar_today,
+                    size: 14, color: Colors.white54),
+                const SizedBox(width: 4),
+                Text(
+                  widget.video.dateFormatted,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.white54,
+                  ),
+                ),
+                const SizedBox(width: 16),
+              ],
+              const Icon(Icons.visibility, size: 14, color: Colors.white54),
+              const SizedBox(width: 4),
+              Text(
+                widget.video.formattedViews,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Colors.white54,
+                ),
+              ),
+              if (widget.video.likes > 0) ...[
+                const SizedBox(width: 16),
+                const Icon(Icons.thumb_up, size: 14, color: Colors.white54),
+                const SizedBox(width: 4),
+                Text(
+                  '${widget.video.likes}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.white54,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          if (widget.video.author.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Icon(Icons.person, size: 16, color: Colors.white54),
+                const SizedBox(width: 8),
+                Text(
+                  widget.video.author,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.white70,
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (widget.video.description.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const Divider(color: Colors.white24),
+            const SizedBox(height: 16),
+            Text(
+              widget.video.description,
+              style: const TextStyle(
+                fontSize: 14,
+                color: Colors.white70,
+                height: 1.5,
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
