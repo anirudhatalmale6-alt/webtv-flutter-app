@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
-import 'package:webview_flutter/webview_flutter.dart';
-import 'package:webview_flutter_android/webview_flutter_android.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import '../models/video.dart';
 import '../config/app_config.dart';
 
@@ -22,13 +20,14 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   VideoPlayerController? _videoController;
   ChewieController? _chewieController;
 
-  // For WebView embedded videos
-  WebViewController? _webViewController;
+  // For InAppWebView embedded videos
+  InAppWebViewController? _webViewController;
 
   bool _isLoading = true;
   String? _error;
   bool _isEmbedded = false; // YouTube or Vimeo embedded
   bool _isFullscreen = false;
+  String? _embedHtml;
 
   @override
   void initState() {
@@ -45,13 +44,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       print('Embed URL: ${widget.video.embedUrl}');
 
       if (widget.video.videoType == 'youtube' && widget.video.youtubeId != null) {
-        // For YouTube videos, embed using WebView
         _initializeYouTubeEmbed(widget.video.youtubeId!);
       } else if (widget.video.videoType == 'vimeo' && widget.video.vimeoId != null) {
-        // For Vimeo videos, embed using WebView
         _initializeVimeoEmbed(widget.video.vimeoId!);
       } else if (widget.video.embedUrl != null && widget.video.embedUrl!.isNotEmpty) {
-        // Try to extract YouTube/Vimeo ID from embed URL
         final youtubeId = _extractYouTubeId(widget.video.embedUrl!);
         if (youtubeId != null) {
           _initializeYouTubeEmbed(youtubeId);
@@ -60,12 +56,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           if (vimeoId != null) {
             _initializeVimeoEmbed(vimeoId);
           } else {
-            // Generic embed URL
             _initializeGenericEmbed(widget.video.embedUrl!);
           }
         }
       } else if (widget.video.mediaUrl != null && widget.video.mediaUrl!.isNotEmpty) {
-        // Initialize native video player for direct URLs
         await _initializeNativePlayer(widget.video.mediaUrl!);
       } else {
         setState(() {
@@ -85,23 +79,24 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   void _initializeYouTubeEmbed(String youtubeId) {
     print('Initializing YouTube embed for ID: $youtubeId');
 
-    // Create controller with platform-specific settings
-    final controller = WebViewController();
-
-    // Configure for Android to allow video playback
-    if (controller.platform is AndroidWebViewController) {
-      final androidController = controller.platform as AndroidWebViewController;
-      androidController.setMediaPlaybackRequiresUserGesture(false);
-    }
-
-    controller.setJavaScriptMode(JavaScriptMode.unrestricted);
-    controller.setBackgroundColor(Colors.black);
-
-    // Load YouTube embed URL directly (more reliable than HTML string)
-    final embedUrl = 'https://www.youtube.com/embed/$youtubeId?autoplay=1&playsinline=1&rel=0&modestbranding=1&showinfo=0&controls=1&fs=1';
-    controller.loadRequest(Uri.parse(embedUrl));
-
-    _webViewController = controller;
+    _embedHtml = '''
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<style>
+*{margin:0;padding:0;overflow:hidden}
+html,body{height:100%;background:#000}
+iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:none}
+</style>
+</head>
+<body>
+<iframe src="https://www.youtube.com/embed/$youtubeId?autoplay=1&playsinline=1&rel=0&modestbranding=1&controls=1&fs=1&enablejsapi=1"
+frameborder="0" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture;web-share"
+allowfullscreen></iframe>
+</body>
+</html>
+''';
 
     setState(() {
       _isEmbedded = true;
@@ -112,23 +107,23 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   void _initializeVimeoEmbed(String vimeoId) {
     print('Initializing Vimeo embed for ID: $vimeoId');
 
-    // Create controller with platform-specific settings
-    final controller = WebViewController();
-
-    // Configure for Android to allow video playback
-    if (controller.platform is AndroidWebViewController) {
-      final androidController = controller.platform as AndroidWebViewController;
-      androidController.setMediaPlaybackRequiresUserGesture(false);
-    }
-
-    controller.setJavaScriptMode(JavaScriptMode.unrestricted);
-    controller.setBackgroundColor(Colors.black);
-
-    // Load Vimeo embed URL directly (hides all branding for storage use)
-    final embedUrl = 'https://player.vimeo.com/video/$vimeoId?autoplay=1&title=0&byline=0&portrait=0&badge=0&transparent=0&background=1';
-    controller.loadRequest(Uri.parse(embedUrl));
-
-    _webViewController = controller;
+    _embedHtml = '''
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<style>
+*{margin:0;padding:0;overflow:hidden}
+html,body{height:100%;background:#000}
+iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:none}
+</style>
+</head>
+<body>
+<iframe src="https://player.vimeo.com/video/$vimeoId?autoplay=1&title=0&byline=0&portrait=0&badge=0"
+frameborder="0" allow="autoplay;fullscreen;picture-in-picture" allowfullscreen></iframe>
+</body>
+</html>
+''';
 
     setState(() {
       _isEmbedded = true;
@@ -139,20 +134,22 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   void _initializeGenericEmbed(String embedUrl) {
     print('Initializing generic embed for URL: $embedUrl');
 
-    // Create controller with platform-specific settings
-    final controller = WebViewController();
-
-    // Configure for Android to allow video playback
-    if (controller.platform is AndroidWebViewController) {
-      final androidController = controller.platform as AndroidWebViewController;
-      androidController.setMediaPlaybackRequiresUserGesture(false);
-    }
-
-    controller.setJavaScriptMode(JavaScriptMode.unrestricted);
-    controller.setBackgroundColor(Colors.black);
-    controller.loadRequest(Uri.parse(embedUrl));
-
-    _webViewController = controller;
+    _embedHtml = '''
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<style>
+*{margin:0;padding:0;overflow:hidden}
+html,body{height:100%;background:#000}
+iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:none}
+</style>
+</head>
+<body>
+<iframe src="$embedUrl" frameborder="0" allow="autoplay;fullscreen;picture-in-picture" allowfullscreen></iframe>
+</body>
+</html>
+''';
 
     setState(() {
       _isEmbedded = true;
@@ -195,10 +192,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
   Future<void> _initializeNativePlayer(String videoUrl) async {
     try {
-      String actualUrl = videoUrl;
-
-      _videoController = VideoPlayerController.networkUrl(Uri.parse(actualUrl));
-
+      _videoController = VideoPlayerController.networkUrl(Uri.parse(videoUrl));
       await _videoController!.initialize();
 
       _chewieController = ChewieController(
@@ -217,9 +211,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         ),
         placeholder: Container(
           color: Colors.black,
-          child: const Center(
-            child: CircularProgressIndicator(),
-          ),
+          child: const Center(child: CircularProgressIndicator()),
         ),
         errorBuilder: (context, errorMessage) {
           return Center(
@@ -228,11 +220,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
               children: [
                 const Icon(Icons.error, color: Colors.red, size: 48),
                 const SizedBox(height: 16),
-                Text(
-                  errorMessage,
-                  style: const TextStyle(color: Colors.white),
-                  textAlign: TextAlign.center,
-                ),
+                Text(errorMessage, style: const TextStyle(color: Colors.white), textAlign: TextAlign.center),
               ],
             ),
           );
@@ -309,9 +297,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
   Widget _buildBody() {
     if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     if (_error != null) {
@@ -320,23 +306,45 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
     return Column(
       children: [
-        // Video player
         AspectRatio(
           aspectRatio: 16 / 9,
           child: _buildVideoPlayer(),
         ),
-
-        // Video info
-        Expanded(
-          child: _buildVideoInfo(),
-        ),
+        Expanded(child: _buildVideoInfo()),
       ],
     );
   }
 
   Widget _buildVideoPlayer() {
-    if (_isEmbedded && _webViewController != null) {
-      return WebViewWidget(controller: _webViewController!);
+    if (_isEmbedded && _embedHtml != null) {
+      return InAppWebView(
+        initialData: InAppWebViewInitialData(data: _embedHtml!),
+        initialSettings: InAppWebViewSettings(
+          mediaPlaybackRequiresUserGesture: false,
+          allowsInlineMediaPlayback: true,
+          javaScriptEnabled: true,
+          domStorageEnabled: true,
+          allowFileAccess: true,
+          allowContentAccess: true,
+          supportZoom: false,
+          transparentBackground: true,
+          useHybridComposition: true,
+          hardwareAcceleration: true,
+        ),
+        onWebViewCreated: (controller) {
+          _webViewController = controller;
+          print('InAppWebView created');
+        },
+        onLoadStart: (controller, url) {
+          print('Loading: $url');
+        },
+        onLoadStop: (controller, url) {
+          print('Loaded: $url');
+        },
+        onReceivedError: (controller, request, error) {
+          print('WebView error: ${error.description}');
+        },
+      );
     }
 
     if (_chewieController != null) {
@@ -345,9 +353,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
     return Container(
       color: Colors.black,
-      child: const Center(
-        child: CircularProgressIndicator(),
-      ),
+      child: const Center(child: CircularProgressIndicator()),
     );
   }
 
@@ -360,11 +366,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           children: [
             const Icon(Icons.error_outline, color: Colors.red, size: 64),
             const SizedBox(height: 16),
-            Text(
-              _error!,
-              style: const TextStyle(color: Colors.white70),
-              textAlign: TextAlign.center,
-            ),
+            Text(_error!, style: const TextStyle(color: Colors.white70), textAlign: TextAlign.center),
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: () {
@@ -390,48 +392,25 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         children: [
           Text(
             widget.video.title,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
           ),
           const SizedBox(height: 12),
           Row(
             children: [
               if (widget.video.dateFormatted.isNotEmpty) ...[
-                const Icon(Icons.calendar_today,
-                    size: 14, color: Colors.white54),
+                const Icon(Icons.calendar_today, size: 14, color: Colors.white54),
                 const SizedBox(width: 4),
-                Text(
-                  widget.video.dateFormatted,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.white54,
-                  ),
-                ),
+                Text(widget.video.dateFormatted, style: const TextStyle(fontSize: 12, color: Colors.white54)),
                 const SizedBox(width: 16),
               ],
               const Icon(Icons.visibility, size: 14, color: Colors.white54),
               const SizedBox(width: 4),
-              Text(
-                widget.video.formattedViews,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.white54,
-                ),
-              ),
+              Text(widget.video.formattedViews, style: const TextStyle(fontSize: 12, color: Colors.white54)),
               if (widget.video.likes > 0) ...[
                 const SizedBox(width: 16),
                 const Icon(Icons.thumb_up, size: 14, color: Colors.white54),
                 const SizedBox(width: 4),
-                Text(
-                  '${widget.video.likes}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.white54,
-                  ),
-                ),
+                Text('${widget.video.likes}', style: const TextStyle(fontSize: 12, color: Colors.white54)),
               ],
             ],
           ),
@@ -441,13 +420,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
               children: [
                 const Icon(Icons.person, size: 16, color: Colors.white54),
                 const SizedBox(width: 8),
-                Text(
-                  widget.video.author,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Colors.white70,
-                  ),
-                ),
+                Text(widget.video.author, style: const TextStyle(fontSize: 14, color: Colors.white70)),
               ],
             ),
           ],
@@ -455,14 +428,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
             const SizedBox(height: 16),
             const Divider(color: Colors.white24),
             const SizedBox(height: 16),
-            Text(
-              widget.video.description,
-              style: const TextStyle(
-                fontSize: 14,
-                color: Colors.white70,
-                height: 1.5,
-              ),
-            ),
+            Text(widget.video.description, style: const TextStyle(fontSize: 14, color: Colors.white70, height: 1.5)),
           ],
         ],
       ),
@@ -473,7 +439,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   void dispose() {
     _chewieController?.dispose();
     _videoController?.dispose();
-    // Reset orientation when leaving player
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
