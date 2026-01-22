@@ -180,30 +180,58 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openLiveTV() async {
-    final url = Uri.parse('https://jktv.live');
-    if (await canLaunchUrl(url)) {
+    try {
+      final url = Uri.parse('https://jktv.live');
       await launchUrl(url, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      print('Error opening Live TV: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open Live TV')),
+        );
+      }
     }
   }
 
   void _openContact() async {
-    final url = Uri.parse('mailto:contact@jktv.live');
-    if (await canLaunchUrl(url)) {
+    try {
+      final url = Uri.parse('mailto:contact@jktv.live');
       await launchUrl(url);
+    } catch (e) {
+      print('Error opening email: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Email: contact@jktv.live')),
+        );
+      }
     }
   }
 
   void _openSupportUs() async {
-    final url = Uri.parse('https://jktv.live');
-    if (await canLaunchUrl(url)) {
+    try {
+      final url = Uri.parse('https://jktv.live');
       await launchUrl(url, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      print('Error opening Support page: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open Support page')),
+        );
+      }
     }
   }
 
   void _openWebsite(String path) async {
-    final url = Uri.parse('https://jammukashmir.tv$path');
-    if (await canLaunchUrl(url)) {
+    try {
+      final url = Uri.parse('https://jammukashmir.tv$path');
       await launchUrl(url, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      print('Error opening website: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open website')),
+        );
+      }
     }
   }
 

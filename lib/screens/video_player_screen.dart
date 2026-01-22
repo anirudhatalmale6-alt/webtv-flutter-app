@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 import '../models/video.dart';
 import '../config/app_config.dart';
 
@@ -83,35 +85,23 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   void _initializeYouTubeEmbed(String youtubeId) {
     print('Initializing YouTube embed for ID: $youtubeId');
 
-    // YouTube embed HTML with no branding, autoplay, and controls
-    final html = '''
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-      <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
-        .video-container { position: relative; width: 100%; height: 100%; }
-        iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }
-      </style>
-    </head>
-    <body>
-      <div class="video-container">
-        <iframe
-          src="https://www.youtube.com/embed/$youtubeId?autoplay=1&playsinline=1&rel=0&modestbranding=1&showinfo=0&controls=1&fs=1"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-          allowfullscreen>
-        </iframe>
-      </div>
-    </body>
-    </html>
-    ''';
+    // Create controller with platform-specific settings
+    final controller = WebViewController();
 
-    _webViewController = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(Colors.black)
-      ..loadHtmlString(html);
+    // Configure for Android to allow video playback
+    if (controller.platform is AndroidWebViewController) {
+      final androidController = controller.platform as AndroidWebViewController;
+      androidController.setMediaPlaybackRequiresUserGesture(false);
+    }
+
+    controller.setJavaScriptMode(JavaScriptMode.unrestricted);
+    controller.setBackgroundColor(Colors.black);
+
+    // Load YouTube embed URL directly (more reliable than HTML string)
+    final embedUrl = 'https://www.youtube.com/embed/$youtubeId?autoplay=1&playsinline=1&rel=0&modestbranding=1&showinfo=0&controls=1&fs=1';
+    controller.loadRequest(Uri.parse(embedUrl));
+
+    _webViewController = controller;
 
     setState(() {
       _isEmbedded = true;
@@ -122,35 +112,23 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   void _initializeVimeoEmbed(String vimeoId) {
     print('Initializing Vimeo embed for ID: $vimeoId');
 
-    // Vimeo embed HTML with no branding
-    final html = '''
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-      <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
-        .video-container { position: relative; width: 100%; height: 100%; }
-        iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }
-      </style>
-    </head>
-    <body>
-      <div class="video-container">
-        <iframe
-          src="https://player.vimeo.com/video/$vimeoId?autoplay=1&title=0&byline=0&portrait=0&badge=0"
-          allow="autoplay; fullscreen; picture-in-picture"
-          allowfullscreen>
-        </iframe>
-      </div>
-    </body>
-    </html>
-    ''';
+    // Create controller with platform-specific settings
+    final controller = WebViewController();
 
-    _webViewController = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(Colors.black)
-      ..loadHtmlString(html);
+    // Configure for Android to allow video playback
+    if (controller.platform is AndroidWebViewController) {
+      final androidController = controller.platform as AndroidWebViewController;
+      androidController.setMediaPlaybackRequiresUserGesture(false);
+    }
+
+    controller.setJavaScriptMode(JavaScriptMode.unrestricted);
+    controller.setBackgroundColor(Colors.black);
+
+    // Load Vimeo embed URL directly (hides all branding for storage use)
+    final embedUrl = 'https://player.vimeo.com/video/$vimeoId?autoplay=1&title=0&byline=0&portrait=0&badge=0&transparent=0&background=1';
+    controller.loadRequest(Uri.parse(embedUrl));
+
+    _webViewController = controller;
 
     setState(() {
       _isEmbedded = true;
@@ -161,34 +139,20 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   void _initializeGenericEmbed(String embedUrl) {
     print('Initializing generic embed for URL: $embedUrl');
 
-    final html = '''
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-      <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
-        .video-container { position: relative; width: 100%; height: 100%; }
-        iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }
-      </style>
-    </head>
-    <body>
-      <div class="video-container">
-        <iframe
-          src="$embedUrl"
-          allow="autoplay; fullscreen; picture-in-picture"
-          allowfullscreen>
-        </iframe>
-      </div>
-    </body>
-    </html>
-    ''';
+    // Create controller with platform-specific settings
+    final controller = WebViewController();
 
-    _webViewController = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(Colors.black)
-      ..loadHtmlString(html);
+    // Configure for Android to allow video playback
+    if (controller.platform is AndroidWebViewController) {
+      final androidController = controller.platform as AndroidWebViewController;
+      androidController.setMediaPlaybackRequiresUserGesture(false);
+    }
+
+    controller.setJavaScriptMode(JavaScriptMode.unrestricted);
+    controller.setBackgroundColor(Colors.black);
+    controller.loadRequest(Uri.parse(embedUrl));
+
+    _webViewController = controller;
 
     setState(() {
       _isEmbedded = true;
