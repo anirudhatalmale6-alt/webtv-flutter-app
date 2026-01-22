@@ -16,18 +16,17 @@ class VideoPlayerScreen extends StatefulWidget {
 }
 
 class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
-  // For direct video playback
   VideoPlayerController? _videoController;
   ChewieController? _chewieController;
-
-  // For InAppWebView embedded videos
   InAppWebViewController? _webViewController;
 
   bool _isLoading = true;
   String? _error;
-  bool _isEmbedded = false; // YouTube or Vimeo embedded
+  bool _isEmbedded = false;
   bool _isFullscreen = false;
-  String? _embedHtml;
+
+  // Store the embed URL to load directly
+  String? _embedUrl;
 
   @override
   void initState() {
@@ -78,26 +77,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
 
   void _initializeYouTubeEmbed(String youtubeId) {
     print('Initializing YouTube embed for ID: $youtubeId');
-
-    _embedHtml = '''
-<!DOCTYPE html>
-<html>
-<head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<style>
-*{margin:0;padding:0;overflow:hidden}
-html,body{height:100%;background:#000}
-iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:none}
-</style>
-</head>
-<body>
-<iframe src="https://www.youtube.com/embed/$youtubeId?autoplay=1&playsinline=1&rel=0&modestbranding=1&controls=1&fs=1&enablejsapi=1"
-frameborder="0" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture;web-share"
-allowfullscreen></iframe>
-</body>
-</html>
-''';
-
+    // Load YouTube embed URL directly
+    _embedUrl = 'https://www.youtube.com/embed/$youtubeId?autoplay=1&playsinline=1&rel=0&modestbranding=1&controls=1';
     setState(() {
       _isEmbedded = true;
       _isLoading = false;
@@ -106,25 +87,8 @@ allowfullscreen></iframe>
 
   void _initializeVimeoEmbed(String vimeoId) {
     print('Initializing Vimeo embed for ID: $vimeoId');
-
-    _embedHtml = '''
-<!DOCTYPE html>
-<html>
-<head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<style>
-*{margin:0;padding:0;overflow:hidden}
-html,body{height:100%;background:#000}
-iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:none}
-</style>
-</head>
-<body>
-<iframe src="https://player.vimeo.com/video/$vimeoId?autoplay=1&title=0&byline=0&portrait=0&badge=0"
-frameborder="0" allow="autoplay;fullscreen;picture-in-picture" allowfullscreen></iframe>
-</body>
-</html>
-''';
-
+    // Load Vimeo embed URL directly (hides branding)
+    _embedUrl = 'https://player.vimeo.com/video/$vimeoId?autoplay=1&title=0&byline=0&portrait=0&badge=0';
     setState(() {
       _isEmbedded = true;
       _isLoading = false;
@@ -133,24 +97,7 @@ frameborder="0" allow="autoplay;fullscreen;picture-in-picture" allowfullscreen><
 
   void _initializeGenericEmbed(String embedUrl) {
     print('Initializing generic embed for URL: $embedUrl');
-
-    _embedHtml = '''
-<!DOCTYPE html>
-<html>
-<head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<style>
-*{margin:0;padding:0;overflow:hidden}
-html,body{height:100%;background:#000}
-iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:none}
-</style>
-</head>
-<body>
-<iframe src="$embedUrl" frameborder="0" allow="autoplay;fullscreen;picture-in-picture" allowfullscreen></iframe>
-</body>
-</html>
-''';
-
+    _embedUrl = embedUrl;
     setState(() {
       _isEmbedded = true;
       _isLoading = false;
@@ -316,34 +263,42 @@ iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:none}
   }
 
   Widget _buildVideoPlayer() {
-    if (_isEmbedded && _embedHtml != null) {
-      return InAppWebView(
-        initialData: InAppWebViewInitialData(data: _embedHtml!),
-        initialSettings: InAppWebViewSettings(
-          mediaPlaybackRequiresUserGesture: false,
-          allowsInlineMediaPlayback: true,
-          javaScriptEnabled: true,
-          domStorageEnabled: true,
-          allowFileAccess: true,
-          allowContentAccess: true,
-          supportZoom: false,
-          transparentBackground: true,
-          useHybridComposition: true,
-          hardwareAcceleration: true,
+    if (_isEmbedded && _embedUrl != null) {
+      return Container(
+        color: Colors.black,
+        child: InAppWebView(
+          initialUrlRequest: URLRequest(url: WebUri(_embedUrl!)),
+          initialSettings: InAppWebViewSettings(
+            mediaPlaybackRequiresUserGesture: false,
+            allowsInlineMediaPlayback: true,
+            javaScriptEnabled: true,
+            domStorageEnabled: true,
+            supportZoom: false,
+            useHybridComposition: true,
+            hardwareAcceleration: true,
+            allowFileAccess: true,
+            allowContentAccess: true,
+            useShouldOverrideUrlLoading: true,
+            useOnLoadResource: false,
+            cacheEnabled: true,
+          ),
+          onWebViewCreated: (controller) {
+            _webViewController = controller;
+            print('InAppWebView created for URL: $_embedUrl');
+          },
+          onLoadStart: (controller, url) {
+            print('WebView loading: $url');
+          },
+          onLoadStop: (controller, url) {
+            print('WebView loaded: $url');
+          },
+          onReceivedError: (controller, request, error) {
+            print('WebView error: ${error.description} for ${request.url}');
+          },
+          onConsoleMessage: (controller, consoleMessage) {
+            print('WebView console: ${consoleMessage.message}');
+          },
         ),
-        onWebViewCreated: (controller) {
-          _webViewController = controller;
-          print('InAppWebView created');
-        },
-        onLoadStart: (controller, url) {
-          print('Loading: $url');
-        },
-        onLoadStop: (controller, url) {
-          print('Loaded: $url');
-        },
-        onReceivedError: (controller, request, error) {
-          print('WebView error: ${error.description}');
-        },
       );
     }
 
