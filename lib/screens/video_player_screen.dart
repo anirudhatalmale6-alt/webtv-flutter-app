@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import '../models/video.dart';
 import '../config/app_config.dart';
 
@@ -20,10 +20,13 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   VideoPlayerController? _videoController;
   ChewieController? _chewieController;
 
+  // For WebView embedded videos
+  WebViewController? _webViewController;
+
   bool _isLoading = true;
   String? _error;
-  bool _isYouTube = false;
-  bool _isVimeo = false;
+  bool _isEmbedded = false; // YouTube or Vimeo embedded
+  bool _isFullscreen = false;
 
   @override
   void initState() {
@@ -40,42 +43,28 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       print('Embed URL: ${widget.video.embedUrl}');
 
       if (widget.video.videoType == 'youtube' && widget.video.youtubeId != null) {
-        // For YouTube videos, show a play button that opens in YouTube app
-        setState(() {
-          _isYouTube = true;
-          _isLoading = false;
-        });
-      } else if (widget.video.videoType == 'vimeo') {
-        // For Vimeo videos, show a play button that opens in Vimeo app
-        setState(() {
-          _isVimeo = true;
-          _isLoading = false;
-        });
-      } else if (widget.video.mediaUrl != null && widget.video.mediaUrl!.isNotEmpty) {
-        // Initialize native video player for direct URLs
-        await _initializeNativePlayer(widget.video.mediaUrl!);
+        // For YouTube videos, embed using WebView
+        _initializeYouTubeEmbed(widget.video.youtubeId!);
+      } else if (widget.video.videoType == 'vimeo' && widget.video.vimeoId != null) {
+        // For Vimeo videos, embed using WebView
+        _initializeVimeoEmbed(widget.video.vimeoId!);
       } else if (widget.video.embedUrl != null && widget.video.embedUrl!.isNotEmpty) {
-        // Try to extract YouTube/Vimeo ID from embed URL as fallback
+        // Try to extract YouTube/Vimeo ID from embed URL
         final youtubeId = _extractYouTubeId(widget.video.embedUrl!);
         if (youtubeId != null) {
-          setState(() {
-            _isYouTube = true;
-            _isLoading = false;
-          });
+          _initializeYouTubeEmbed(youtubeId);
         } else {
           final vimeoId = _extractVimeoId(widget.video.embedUrl!);
           if (vimeoId != null) {
-            setState(() {
-              _isVimeo = true;
-              _isLoading = false;
-            });
+            _initializeVimeoEmbed(vimeoId);
           } else {
-            setState(() {
-              _error = 'No playable video URL available';
-              _isLoading = false;
-            });
+            // Generic embed URL
+            _initializeGenericEmbed(widget.video.embedUrl!);
           }
         }
+      } else if (widget.video.mediaUrl != null && widget.video.mediaUrl!.isNotEmpty) {
+        // Initialize native video player for direct URLs
+        await _initializeNativePlayer(widget.video.mediaUrl!);
       } else {
         setState(() {
           _error = 'No video URL available';
@@ -91,6 +80,122 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     }
   }
 
+  void _initializeYouTubeEmbed(String youtubeId) {
+    print('Initializing YouTube embed for ID: $youtubeId');
+
+    // YouTube embed HTML with no branding, autoplay, and controls
+    final html = '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+        .video-container { position: relative; width: 100%; height: 100%; }
+        iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }
+      </style>
+    </head>
+    <body>
+      <div class="video-container">
+        <iframe
+          src="https://www.youtube.com/embed/$youtubeId?autoplay=1&playsinline=1&rel=0&modestbranding=1&showinfo=0&controls=1&fs=1"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+          allowfullscreen>
+        </iframe>
+      </div>
+    </body>
+    </html>
+    ''';
+
+    _webViewController = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(Colors.black)
+      ..loadHtmlString(html);
+
+    setState(() {
+      _isEmbedded = true;
+      _isLoading = false;
+    });
+  }
+
+  void _initializeVimeoEmbed(String vimeoId) {
+    print('Initializing Vimeo embed for ID: $vimeoId');
+
+    // Vimeo embed HTML with no branding
+    final html = '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+        .video-container { position: relative; width: 100%; height: 100%; }
+        iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }
+      </style>
+    </head>
+    <body>
+      <div class="video-container">
+        <iframe
+          src="https://player.vimeo.com/video/$vimeoId?autoplay=1&title=0&byline=0&portrait=0&badge=0"
+          allow="autoplay; fullscreen; picture-in-picture"
+          allowfullscreen>
+        </iframe>
+      </div>
+    </body>
+    </html>
+    ''';
+
+    _webViewController = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(Colors.black)
+      ..loadHtmlString(html);
+
+    setState(() {
+      _isEmbedded = true;
+      _isLoading = false;
+    });
+  }
+
+  void _initializeGenericEmbed(String embedUrl) {
+    print('Initializing generic embed for URL: $embedUrl');
+
+    final html = '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+        .video-container { position: relative; width: 100%; height: 100%; }
+        iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }
+      </style>
+    </head>
+    <body>
+      <div class="video-container">
+        <iframe
+          src="$embedUrl"
+          allow="autoplay; fullscreen; picture-in-picture"
+          allowfullscreen>
+        </iframe>
+      </div>
+    </body>
+    </html>
+    ''';
+
+    _webViewController = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(Colors.black)
+      ..loadHtmlString(html);
+
+    setState(() {
+      _isEmbedded = true;
+      _isLoading = false;
+    });
+  }
+
   String? _extractYouTubeId(String url) {
     final patterns = [
       RegExp(r'youtu\.be/([a-zA-Z0-9_-]{11})'),
@@ -104,16 +209,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       if (match != null) {
         return match.group(1);
       }
-    }
-    return null;
-  }
-
-  String? _getYouTubeId() {
-    if (widget.video.youtubeId != null) {
-      return widget.video.youtubeId;
-    }
-    if (widget.video.embedUrl != null) {
-      return _extractYouTubeId(widget.video.embedUrl!);
     }
     return null;
   }
@@ -134,48 +229,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     return null;
   }
 
-  String? _getVimeoId() {
-    if (widget.video.vimeoId != null) {
-      return widget.video.vimeoId;
-    }
-    if (widget.video.embedUrl != null) {
-      return _extractVimeoId(widget.video.embedUrl!);
-    }
-    return null;
-  }
-
-  void _openInVimeoApp() async {
-    final vimeoId = _getVimeoId();
-    if (vimeoId != null) {
-      // Try Vimeo app first, then fall back to browser
-      final vimeoAppUrl = 'vimeo://app.vimeo.com/videos/$vimeoId';
-      final vimeoWebUrl = 'https://vimeo.com/$vimeoId';
-
-      try {
-        // Try to open in Vimeo app
-        final appUri = Uri.parse(vimeoAppUrl);
-        if (await canLaunchUrl(appUri)) {
-          await launchUrl(appUri);
-          return;
-        }
-      } catch (e) {
-        print('Could not open Vimeo app: $e');
-      }
-
-      // Fall back to browser
-      final webUri = Uri.parse(vimeoWebUrl);
-      if (await canLaunchUrl(webUri)) {
-        await launchUrl(webUri, mode: LaunchMode.externalApplication);
-      }
-    }
-  }
-
   Future<void> _initializeNativePlayer(String videoUrl) async {
     try {
       String actualUrl = videoUrl;
-
-      // Note: Vimeo videos are now handled via _isVimeo flag and open in Vimeo app
-      // Direct stream URLs (m3u8, mp4) will play natively
 
       _videoController = VideoPlayerController.networkUrl(Uri.parse(actualUrl));
 
@@ -229,34 +285,38 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     }
   }
 
-  void _openInYouTubeApp() async {
-    final youtubeId = _getYouTubeId();
-    if (youtubeId != null) {
-      // Try YouTube app first, then fall back to browser
-      final youtubeAppUrl = 'vnd.youtube://$youtubeId';
-      final youtubeWebUrl = 'https://www.youtube.com/watch?v=$youtubeId';
+  void _toggleFullscreen() {
+    setState(() {
+      _isFullscreen = !_isFullscreen;
+    });
 
-      try {
-        // Try to open in YouTube app
-        final appUri = Uri.parse(youtubeAppUrl);
-        if (await canLaunchUrl(appUri)) {
-          await launchUrl(appUri);
-          return;
-        }
-      } catch (e) {
-        print('Could not open YouTube app: $e');
-      }
-
-      // Fall back to browser
-      final webUri = Uri.parse(youtubeWebUrl);
-      if (await canLaunchUrl(webUri)) {
-        await launchUrl(webUri, mode: LaunchMode.externalApplication);
-      }
+    if (_isFullscreen) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+    } else {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+      ]);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isFullscreen) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: GestureDetector(
+          onTap: _toggleFullscreen,
+          child: _buildVideoPlayer(),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
@@ -272,18 +332,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           overflow: TextOverflow.ellipsis,
         ),
         actions: [
-          if (_isYouTube)
-            IconButton(
-              icon: const Icon(Icons.open_in_new),
-              onPressed: _openInYouTubeApp,
-              tooltip: 'Open in YouTube',
-            ),
-          if (_isVimeo)
-            IconButton(
-              icon: const Icon(Icons.open_in_new),
-              onPressed: _openInVimeoApp,
-              tooltip: 'Open in Vimeo',
-            ),
+          IconButton(
+            icon: const Icon(Icons.fullscreen),
+            onPressed: _toggleFullscreen,
+            tooltip: 'Fullscreen',
+          ),
         ],
       ),
       body: _buildBody(),
@@ -301,109 +354,12 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       return _buildErrorView();
     }
 
-    if (_isYouTube) {
-      return _buildYouTubeView();
-    }
-
-    if (_isVimeo) {
-      return _buildVimeoView();
-    }
-
     return Column(
       children: [
         // Video player
         AspectRatio(
-          aspectRatio: _videoController?.value.aspectRatio ?? 16 / 9,
-          child: _chewieController != null
-              ? Chewie(controller: _chewieController!)
-              : const Center(child: CircularProgressIndicator()),
-        ),
-
-        // Video info
-        Expanded(
-          child: _buildVideoInfo(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildYouTubeView() {
-    return Column(
-      children: [
-        // YouTube thumbnail with play button overlay
-        AspectRatio(
           aspectRatio: 16 / 9,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              // Thumbnail
-              Container(
-                color: Colors.black,
-                child: widget.video.poster.isNotEmpty
-                    ? Image.network(
-                        widget.video.poster,
-                        fit: BoxFit.cover,
-                        width: double.infinity,
-                        errorBuilder: (context, error, stackTrace) =>
-                            _buildYouTubeThumbnail(),
-                      )
-                    : _buildYouTubeThumbnail(),
-              ),
-              // Play button overlay
-              GestureDetector(
-                onTap: _openInYouTubeApp,
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.red,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: const Icon(
-                    Icons.play_arrow,
-                    size: 48,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-              // YouTube logo
-              Positioned(
-                bottom: 16,
-                right: 16,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.red,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Text(
-                    'YouTube',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // Tap to play message
-        Container(
-          padding: const EdgeInsets.all(16),
-          color: Colors.grey[900],
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.touch_app, color: Colors.white70),
-              const SizedBox(width: 8),
-              const Text(
-                'Tap to play on YouTube',
-                style: TextStyle(color: Colors.white70),
-              ),
-            ],
-          ),
+          child: _buildVideoPlayer(),
         ),
 
         // Video info
@@ -414,122 +370,19 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     );
   }
 
-  Widget _buildVimeoView() {
-    return Column(
-      children: [
-        // Vimeo thumbnail with play button overlay
-        AspectRatio(
-          aspectRatio: 16 / 9,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              // Thumbnail - use poster image or Vimeo thumbnail
-              Container(
-                color: Colors.black,
-                child: widget.video.poster.isNotEmpty
-                    ? Image.network(
-                        widget.video.poster,
-                        fit: BoxFit.cover,
-                        width: double.infinity,
-                        errorBuilder: (context, error, stackTrace) =>
-                            _buildVimeoThumbnail(),
-                      )
-                    : _buildVimeoThumbnail(),
-              ),
-              // Play button overlay
-              GestureDetector(
-                onTap: _openInVimeoApp,
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1AB7EA), // Vimeo blue
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: const Icon(
-                    Icons.play_arrow,
-                    size: 48,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-              // Vimeo logo
-              Positioned(
-                bottom: 16,
-                right: 16,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1AB7EA), // Vimeo blue
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Text(
-                    'Vimeo',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // Tap to play message
-        Container(
-          padding: const EdgeInsets.all(16),
-          color: Colors.grey[900],
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.touch_app, color: Colors.white70),
-              const SizedBox(width: 8),
-              const Text(
-                'Tap to play on Vimeo',
-                style: TextStyle(color: Colors.white70),
-              ),
-            ],
-          ),
-        ),
-
-        // Video info
-        Expanded(
-          child: _buildVideoInfo(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildVimeoThumbnail() {
-    // Vimeo thumbnails require API call, so use a placeholder
-    return Container(
-      color: Colors.grey[900],
-      child: const Center(
-        child: Icon(Icons.video_library, size: 64, color: Color(0xFF1AB7EA)),
-      ),
-    );
-  }
-
-  Widget _buildYouTubeThumbnail() {
-    final youtubeId = _getYouTubeId();
-    if (youtubeId != null) {
-      return Image.network(
-        'https://img.youtube.com/vi/$youtubeId/hqdefault.jpg',
-        fit: BoxFit.cover,
-        width: double.infinity,
-        errorBuilder: (context, error, stackTrace) => Container(
-          color: Colors.grey[900],
-          child: const Center(
-            child: Icon(Icons.video_library, size: 64, color: Colors.white54),
-          ),
-        ),
-      );
+  Widget _buildVideoPlayer() {
+    if (_isEmbedded && _webViewController != null) {
+      return WebViewWidget(controller: _webViewController!);
     }
+
+    if (_chewieController != null) {
+      return Chewie(controller: _chewieController!);
+    }
+
     return Container(
-      color: Colors.grey[900],
+      color: Colors.black,
       child: const Center(
-        child: Icon(Icons.video_library, size: 64, color: Colors.white54),
+        child: CircularProgressIndicator(),
       ),
     );
   }
@@ -559,18 +412,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
               },
               child: const Text('Retry'),
             ),
-            if (widget.video.embedUrl != null) ...[
-              const SizedBox(height: 16),
-              TextButton(
-                onPressed: () async {
-                  if (await canLaunchUrl(Uri.parse(widget.video.embedUrl!))) {
-                    await launchUrl(Uri.parse(widget.video.embedUrl!),
-                        mode: LaunchMode.externalApplication);
-                  }
-                },
-                child: const Text('Open in Browser'),
-              ),
-            ],
           ],
         ),
       ),
@@ -669,6 +510,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     _chewieController?.dispose();
     _videoController?.dispose();
     // Reset orientation when leaving player
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,

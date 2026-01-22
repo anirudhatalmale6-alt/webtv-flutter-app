@@ -218,8 +218,8 @@ class WebTVApi {
   }
 
   /// Get featured videos
-  Future<List<Video>> getFeaturedVideos() async {
-    final url = _buildUrl('go=clips&do=list&fields=*&resultsPerPageFilter=20&statusFilter=featuredActiveAndApproved');
+  Future<List<Video>> getFeaturedVideos({int limit = 20}) async {
+    final url = _buildUrl('go=clips&do=list&fields=*&resultsPerPageFilter=$limit&statusFilter=featuredActiveAndApproved');
 
     try {
       final response = await _dio.get(url);
@@ -238,6 +238,69 @@ class WebTVApi {
     return [];
   }
 
+  /// Get videos by date (newest first)
+  Future<List<Video>> getVideosByDate({int limit = 40}) async {
+    final url = _buildUrl('go=clips&do=list&fields=*&resultsPerPageFilter=$limit&orderBy=date&order=desc');
+
+    try {
+      final response = await _dio.get(url);
+
+      if (response.statusCode == 200) {
+        final data = _parseResponse(response);
+        if (data['list'] != null) {
+          return (data['list'] as List)
+              .map((item) => Video.fromJson(item))
+              .toList();
+        }
+      }
+    } catch (e) {
+      print('Error fetching videos by date: $e');
+    }
+    return [];
+  }
+
+  /// Get most viewed videos
+  Future<List<Video>> getMostViewedVideos({int limit = 40}) async {
+    final url = _buildUrl('go=clips&do=list&fields=*&resultsPerPageFilter=$limit&orderBy=views&order=desc');
+
+    try {
+      final response = await _dio.get(url);
+
+      if (response.statusCode == 200) {
+        final data = _parseResponse(response);
+        if (data['list'] != null) {
+          return (data['list'] as List)
+              .map((item) => Video.fromJson(item))
+              .toList();
+        }
+      }
+    } catch (e) {
+      print('Error fetching most viewed videos: $e');
+    }
+    return [];
+  }
+
+  /// Get top rated videos (by likes)
+  Future<List<Video>> getTopRatedVideos({int limit = 40}) async {
+    final url = _buildUrl('go=clips&do=list&fields=*&resultsPerPageFilter=$limit&orderBy=likes&order=desc');
+
+    try {
+      final response = await _dio.get(url);
+
+      if (response.statusCode == 200) {
+        final data = _parseResponse(response);
+        if (data['list'] != null) {
+          return (data['list'] as List)
+              .map((item) => Video.fromJson(item))
+              .toList();
+        }
+      }
+    } catch (e) {
+      print('Error fetching top rated videos: $e');
+    }
+    return [];
+  }
+
   /// Get single video details
   Future<Video?> getVideo(int videoId) async {
     final url = _buildUrl('go=clips&do=get&iq=$videoId');
@@ -248,12 +311,25 @@ class WebTVApi {
       if (response.statusCode == 200) {
         final data = _parseResponse(response);
         if (data['data'] != null) {
-          final video = Video.fromJson(data['data']);
-          // Get media URLs
+          // Merge media URLs into data for Video.fromJson to parse
+          final videoData = Map<String, dynamic>.from(data['data']);
           if (data['media'] != null && (data['media'] as List).isNotEmpty) {
             final media = data['media'][0];
-            video.mediaUrl = media['live_ios'] ?? media['media_mbr_html5'] ?? media['embed_flash'];
+            // Add media URLs to videoData so Video.fromJson can extract them
+            if (media['live_ios'] != null && media['live_ios'].toString().isNotEmpty) {
+              videoData['live_ios'] = media['live_ios'];
+            }
+            if (media['embed_flash'] != null && media['embed_flash'].toString().isNotEmpty) {
+              videoData['embed_flash'] = media['embed_flash'];
+            }
+            if (media['embed_html5'] != null && media['embed_html5'].toString().isNotEmpty) {
+              videoData['embed_html5'] = media['embed_html5'];
+            }
+            if (media['vod_html5_h264'] != null && media['vod_html5_h264'].toString().isNotEmpty) {
+              videoData['vod_html5_h264'] = media['vod_html5_h264'];
+            }
           }
+          final video = Video.fromJson(videoData);
           return video;
         }
       }

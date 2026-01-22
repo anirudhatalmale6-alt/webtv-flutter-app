@@ -108,7 +108,11 @@ class FeaturedCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        print('FeaturedCard tapped: ${video.id} - ${video.title}');
+        onTap();
+      },
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
         decoration: BoxDecoration(

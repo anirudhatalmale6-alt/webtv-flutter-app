@@ -63,7 +63,11 @@ class VideoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        print('VideoCard tapped: ${video.id} - ${video.title}');
+        onTap();
+      },
       child: Container(
         width: 140,
         margin: const EdgeInsets.symmetric(horizontal: 4),

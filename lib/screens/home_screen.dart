@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../config/app_config.dart';
 import '../api/webtv_api.dart';
 import '../models/category.dart';
 import '../models/video.dart';
 import '../widgets/video_row.dart';
 import '../widgets/featured_carousel.dart';
+import '../widgets/browse_videos_section.dart';
 import 'search_screen.dart';
 import 'video_player_screen.dart';
 import 'login_screen.dart';
@@ -108,18 +110,53 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openVideo(Video video) async {
-    // Get full video details with media URL
-    final fullVideo = await _api.getVideo(video.id);
-    if (fullVideo != null && fullVideo.mediaUrl != null) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => VideoPlayerScreen(video: fullVideo),
-        ),
-      );
-    } else {
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    try {
+      print('Opening video: ${video.id} - ${video.title}');
+      // Get full video details with media URL
+      final fullVideo = await _api.getVideo(video.id);
+
+      // Hide loading indicator
+      if (mounted) Navigator.of(context).pop();
+
+      if (fullVideo != null) {
+        print('Got video: youtubeId=${fullVideo.youtubeId}, vimeoId=${fullVideo.vimeoId}, mediaUrl=${fullVideo.mediaUrl}, embedUrl=${fullVideo.embedUrl}');
+        // Check if we can play this video (has mediaUrl, youtubeId, vimeoId, or embedUrl)
+        final canPlay = fullVideo.mediaUrl != null ||
+                        fullVideo.youtubeId != null ||
+                        fullVideo.vimeoId != null ||
+                        fullVideo.embedUrl != null;
+        if (canPlay) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => VideoPlayerScreen(video: fullVideo),
+            ),
+          );
+          return;
+        } else {
+          print('Video not playable - no media URLs found');
+        }
+      } else {
+        print('Failed to get video details');
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Unable to load video')),
+      );
+    } catch (e) {
+      print('Error opening video: $e');
+      if (mounted) Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
       );
     }
   }
@@ -142,77 +179,163 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _openLiveTV() async {
+    final url = Uri.parse('https://jktv.live');
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  void _openContact() async {
+    final url = Uri.parse('mailto:contact@jktv.live');
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url);
+    }
+  }
+
+  void _openSupportUs() async {
+    final url = Uri.parse('https://jktv.live');
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  void _openWebsite(String path) async {
+    final url = Uri.parse('https://jammukashmir.tv$path');
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    }
+  }
+
   Widget _buildMenu() {
     return SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 8),
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.white24,
-              borderRadius: BorderRadius.circular(2),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          ListTile(
-            leading: const Icon(Icons.home, color: Colors.white),
-            title: const Text('Home', style: TextStyle(color: Colors.white)),
-            onTap: () => Navigator.pop(context),
-          ),
-          ListTile(
-            leading: const Icon(Icons.live_tv, color: Colors.red),
-            title: const Text('Live', style: TextStyle(color: Colors.white)),
-            onTap: () {
-              Navigator.pop(context);
-              // TODO: Navigate to live stream
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.search, color: Colors.white),
-            title: const Text('Search', style: TextStyle(color: Colors.white)),
-            onTap: () {
-              Navigator.pop(context);
-              _openSearch();
-            },
-          ),
-          if (AppConfig.showLoginButton) ...[
-            const Divider(color: Colors.white24),
+            const SizedBox(height: 16),
+            // Main menu items
             ListTile(
-              leading: Icon(
-                _api.isLoggedIn ? Icons.logout : Icons.login,
-                color: Colors.white,
-              ),
-              title: Text(
-                _api.isLoggedIn ? 'Logout' : 'Login',
-                style: const TextStyle(color: Colors.white),
-              ),
+              leading: const Icon(Icons.home, color: Colors.white),
+              title: const Text('Home', style: TextStyle(color: Colors.white)),
+              onTap: () => Navigator.pop(context),
+            ),
+            ListTile(
+              leading: const Icon(Icons.live_tv, color: Colors.red),
+              title: const Text('JKTV Live', style: TextStyle(color: Colors.white)),
+              subtitle: const Text('Watch Live TV', style: TextStyle(color: Colors.white54, fontSize: 12)),
               onTap: () {
                 Navigator.pop(context);
-                if (_api.isLoggedIn) {
-                  _api.logout();
-                  setState(() {});
-                } else {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const LoginScreen()),
-                  );
-                }
+                _openLiveTV();
               },
             ),
+            ListTile(
+              leading: const Icon(Icons.search, color: Colors.white),
+              title: const Text('Search', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pop(context);
+                _openSearch();
+              },
+            ),
+            const Divider(color: Colors.white24),
+            // Website links
+            ListTile(
+              leading: const Icon(Icons.article, color: Colors.white),
+              title: const Text('News', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pop(context);
+                _openWebsite('/index.php/category/11/news-update/');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.info, color: Colors.white),
+              title: const Text('Introduction', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pop(context);
+                _openWebsite('/index.php/channel/1/jktv/');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.people, color: Colors.white),
+              title: const Text('Who We Are', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pop(context);
+                _openWebsite('/index.php/channel/1/jktv/');
+              },
+            ),
+            const Divider(color: Colors.white24),
+            // Contact & Support
+            ListTile(
+              leading: const Icon(Icons.email, color: Colors.white),
+              title: const Text('Contact Us', style: TextStyle(color: Colors.white)),
+              subtitle: const Text('contact@jktv.live', style: TextStyle(color: Colors.white54, fontSize: 12)),
+              onTap: () {
+                Navigator.pop(context);
+                _openContact();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.favorite, color: Colors.red),
+              title: const Text('Support Us', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pop(context);
+                _openSupportUs();
+              },
+            ),
+            if (AppConfig.showLoginButton) ...[
+              const Divider(color: Colors.white24),
+              ListTile(
+                leading: Icon(
+                  _api.isLoggedIn ? Icons.logout : Icons.login,
+                  color: Colors.white,
+                ),
+                title: Text(
+                  _api.isLoggedIn ? 'Logout' : 'Login',
+                  style: const TextStyle(color: Colors.white),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  if (_api.isLoggedIn) {
+                    _api.logout();
+                    setState(() {});
+                  } else {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const LoginScreen()),
+                    );
+                  }
+                },
+              ),
+            ],
+            const Divider(color: Colors.white24),
+            ListTile(
+              leading: const Icon(Icons.info_outline, color: Colors.white),
+              title: const Text('About', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pop(context);
+                _showAboutDialog();
+              },
+            ),
+            // Version info
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text(
+                'Version ${AppConfig.appVersion}',
+                style: const TextStyle(color: Colors.white38, fontSize: 12),
+              ),
+            ),
+            const SizedBox(height: 16),
           ],
-          ListTile(
-            leading: const Icon(Icons.info_outline, color: Colors.white),
-            title: const Text('About', style: TextStyle(color: Colors.white)),
-            onTap: () {
-              Navigator.pop(context);
-              _showAboutDialog();
-            },
-          ),
-          const SizedBox(height: 16),
-        ],
+        ),
       ),
     );
   }
@@ -345,6 +468,13 @@ class _HomeScreenState extends State<HomeScreen> {
                         onVideoTap: _openVideo,
                       ),
                     ),
+
+                  // Browse Videos section (Featured, By Date, Most Viewed, Top Rated)
+                  SliverToBoxAdapter(
+                    child: BrowseVideosSection(
+                      onVideoTap: _openVideo,
+                    ),
+                  ),
 
                   // Category rows
                   SliverList(
