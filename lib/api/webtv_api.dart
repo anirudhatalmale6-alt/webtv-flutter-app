@@ -197,11 +197,22 @@ class WebTVApi {
   }
 
   /// Get videos for a category
+  /// NOTE: Filter parameters must be passed via POST, not GET (per WebTV API docs)
   Future<List<Video>> getVideosByCategory(int categoryId, {int page = 1, int perPage = 20}) async {
-    final url = _buildUrl('go=clips&do=list&fields=*&resultsPerPageFilter=$perPage&current_page=$page&categoriesFilter=$categoryId');
+    final url = _buildUrl('go=clips&do=list');
 
     try {
-      final response = await _dio.get(url);
+      // Filters must be sent via POST body, not GET query params
+      final response = await _dio.post(
+        url,
+        data: {
+          'fields': '*',
+          'resultsPerPageFilter': perPage.toString(),
+          'current_page': page.toString(),
+          'categoriesFilter': categoryId.toString(),
+        },
+        options: Options(contentType: Headers.formUrlEncodedContentType),
+      );
 
       if (response.statusCode == 200) {
         final data = _parseResponse(response);
@@ -218,11 +229,20 @@ class WebTVApi {
   }
 
   /// Get featured videos
+  /// NOTE: Filter parameters must be passed via POST
   Future<List<Video>> getFeaturedVideos({int limit = 20}) async {
-    final url = _buildUrl('go=clips&do=list&fields=*&resultsPerPageFilter=$limit&statusFilter=featuredActiveAndApproved');
+    final url = _buildUrl('go=clips&do=list');
 
     try {
-      final response = await _dio.get(url);
+      final response = await _dio.post(
+        url,
+        data: {
+          'fields': '*',
+          'resultsPerPageFilter': limit.toString(),
+          'statusFilter': 'featuredActiveAndApproved',
+        },
+        options: Options(contentType: Headers.formUrlEncodedContentType),
+      );
 
       if (response.statusCode == 200) {
         final data = _parseResponse(response);
@@ -239,11 +259,21 @@ class WebTVApi {
   }
 
   /// Get videos by date (newest first)
+  /// NOTE: Filter/order parameters must be passed via POST
   Future<List<Video>> getVideosByDate({int limit = 40}) async {
-    final url = _buildUrl('go=clips&do=list&fields=*&resultsPerPageFilter=$limit&orderBy=date&order=desc');
+    final url = _buildUrl('go=clips&do=list');
 
     try {
-      final response = await _dio.get(url);
+      final response = await _dio.post(
+        url,
+        data: {
+          'fields': '*',
+          'resultsPerPageFilter': limit.toString(),
+          'orderBy': 'date',
+          'order': 'desc',
+        },
+        options: Options(contentType: Headers.formUrlEncodedContentType),
+      );
 
       if (response.statusCode == 200) {
         final data = _parseResponse(response);
@@ -260,11 +290,21 @@ class WebTVApi {
   }
 
   /// Get most viewed videos
+  /// NOTE: Filter/order parameters must be passed via POST
   Future<List<Video>> getMostViewedVideos({int limit = 40}) async {
-    final url = _buildUrl('go=clips&do=list&fields=*&resultsPerPageFilter=$limit&orderBy=views&order=desc');
+    final url = _buildUrl('go=clips&do=list');
 
     try {
-      final response = await _dio.get(url);
+      final response = await _dio.post(
+        url,
+        data: {
+          'fields': '*',
+          'resultsPerPageFilter': limit.toString(),
+          'orderBy': 'views',
+          'order': 'desc',
+        },
+        options: Options(contentType: Headers.formUrlEncodedContentType),
+      );
 
       if (response.statusCode == 200) {
         final data = _parseResponse(response);
@@ -281,11 +321,21 @@ class WebTVApi {
   }
 
   /// Get top rated videos (by likes)
+  /// NOTE: Filter/order parameters must be passed via POST
   Future<List<Video>> getTopRatedVideos({int limit = 40}) async {
-    final url = _buildUrl('go=clips&do=list&fields=*&resultsPerPageFilter=$limit&orderBy=likes&order=desc');
+    final url = _buildUrl('go=clips&do=list');
 
     try {
-      final response = await _dio.get(url);
+      final response = await _dio.post(
+        url,
+        data: {
+          'fields': '*',
+          'resultsPerPageFilter': limit.toString(),
+          'orderBy': 'likes',
+          'order': 'desc',
+        },
+        options: Options(contentType: Headers.formUrlEncodedContentType),
+      );
 
       if (response.statusCode == 200) {
         final data = _parseResponse(response);
@@ -340,12 +390,20 @@ class WebTVApi {
   }
 
   /// Search videos
+  /// NOTE: Filter parameters must be passed via POST
   Future<List<Video>> searchVideos(String query) async {
-    final encodedQuery = Uri.encodeComponent(query);
-    final url = _buildUrl('go=clips&do=list&fields=*&resultsPerPageFilter=50&searchFilter=$encodedQuery');
+    final url = _buildUrl('go=clips&do=list');
 
     try {
-      final response = await _dio.get(url);
+      final response = await _dio.post(
+        url,
+        data: {
+          'fields': '*',
+          'resultsPerPageFilter': '50',
+          'searchFilter': query,
+        },
+        options: Options(contentType: Headers.formUrlEncodedContentType),
+      );
 
       if (response.statusCode == 200) {
         final data = _parseResponse(response);
