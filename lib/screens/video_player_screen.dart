@@ -2,10 +2,52 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
-import 'package:youtube_player_flutter/youtube_player_flutter.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
 import '../models/video.dart';
 import '../config/app_config.dart';
+
+// Social share
+class SocialShare {
+  static String _shareText(String url, String title) {
+    return '$title - Watch on JKTV Live app\n$url';
+  }
+
+  static Future<void> shareGeneral(String url, String title) async {
+    await Share.share(_shareText(url, title));
+  }
+
+  static Future<void> shareToWhatsApp(String url, String title) async {
+    final text = _shareText(url, title);
+    final shareUrl = 'https://api.whatsapp.com/send?text=${Uri.encodeComponent(text)}';
+    await _launchUrl(shareUrl);
+  }
+
+  static Future<void> shareToTelegram(String url, String title) async {
+    final text = _shareText(url, title);
+    final shareUrl = 'https://t.me/share/url?url=${Uri.encodeComponent(url)}&text=${Uri.encodeComponent('$title - Watch on JKTV Live app')}';
+    await _launchUrl(shareUrl);
+  }
+
+  static Future<void> copyLink(BuildContext context, String url) async {
+    await Clipboard.setData(ClipboardData(text: url));
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Link copied to clipboard')),
+      );
+    }
+  }
+
+  static Future<void> _launchUrl(String url) async {
+    try {
+      final uri = Uri.parse(url);
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      print('Error launching URL: $e');
+    }
+  }
+}
 
 class VideoPlayerScreen extends StatefulWidget {
   final Video video;
@@ -16,45 +58,70 @@ class VideoPlayerScreen extends StatefulWidget {
   State<VideoPlayerScreen> createState() => _VideoPlayerScreenState();
 }
 
-class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
+class _VideoPlayerScreenState extends State<VideoPlayerScreen>
+    with SingleTickerProviderStateMixin {
   VideoPlayerController? _videoController;
   ChewieController? _chewieController;
-  YoutubePlayerController? _youtubeController;
+  InAppWebViewController? _webViewController;
 
   bool _isLoading = true;
+  bool _showSplash = true;
   String? _error;
   String _playerType = 'none'; // 'youtube', 'vimeo', 'native'
   bool _isFullscreen = false;
 
-  // For Vimeo - we'll open externally since there's no good Flutter package
-  String? _vimeoUrl;
+  late AnimationController _splashAnimController;
+  late Animation<double> _splashFadeAnimation;
+
+  // InAppWebView settings for YouTube/Vimeo
+  final InAppWebViewSettings _webViewSettings = InAppWebViewSettings(
+    mediaPlaybackRequiresUserGesture: false,
+    allowsInlineMediaPlayback: true,
+    iframeAllowFullscreen: true,
+    javaScriptEnabled: true,
+    domStorageEnabled: true,
+    databaseEnabled: true,
+    useWideViewPort: true,
+    loadWithOverviewMode: true,
+    supportMultipleWindows: false,
+    javaScriptCanOpenWindowsAutomatically: false,
+    userAgent: 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+  );
 
   @override
   void initState() {
     super.initState();
+
+    _splashAnimController = AnimationController(
+      duration: const Duration(milliseconds: 500),
+      vsync: this,
+    );
+    _splashFadeAnimation = Tween<double>(begin: 1.0, end: 0.0).animate(
+      CurvedAnimation(parent: _splashAnimController, curve: Curves.easeOut),
+    );
+    _splashAnimController.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        setState(() => _showSplash = false);
+      }
+    });
+
     _initializePlayer();
   }
 
   Future<void> _initializePlayer() async {
     try {
-      print('Video type: ${widget.video.videoType}');
-      print('YouTube ID: ${widget.video.youtubeId}');
-      print('Vimeo ID: ${widget.video.vimeoId}');
-      print('Media URL: ${widget.video.mediaUrl}');
-      print('Embed URL: ${widget.video.embedUrl}');
-
       if (widget.video.videoType == 'youtube' && widget.video.youtubeId != null) {
-        _initializeYouTubePlayer(widget.video.youtubeId!);
+        _setupWebViewPlayer('youtube', widget.video.youtubeId!);
       } else if (widget.video.videoType == 'vimeo' && widget.video.vimeoId != null) {
-        _initializeVimeoPlayer(widget.video.vimeoId!);
+        _setupWebViewPlayer('vimeo', widget.video.vimeoId!);
       } else if (widget.video.embedUrl != null && widget.video.embedUrl!.isNotEmpty) {
-        final youtubeId = YoutubePlayer.convertUrlToId(widget.video.embedUrl!);
+        final youtubeId = _extractYouTubeIdFromUrl(widget.video.embedUrl!);
         if (youtubeId != null) {
-          _initializeYouTubePlayer(youtubeId);
+          _setupWebViewPlayer('youtube', youtubeId);
         } else {
           final vimeoId = _extractVimeoId(widget.video.embedUrl!);
           if (vimeoId != null) {
-            _initializeVimeoPlayer(vimeoId);
+            _setupWebViewPlayer('vimeo', vimeoId);
           } else {
             setState(() {
               _error = 'Unsupported video format';
@@ -71,7 +138,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         });
       }
     } catch (e) {
-      print('Error initializing player: $e');
       setState(() {
         _error = 'Failed to load video: $e';
         _isLoading = false;
@@ -79,38 +145,94 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     }
   }
 
-  void _initializeYouTubePlayer(String youtubeId) {
-    print('Initializing YouTube player for ID: $youtubeId');
-
-    _youtubeController = YoutubePlayerController(
-      initialVideoId: youtubeId,
-      flags: const YoutubePlayerFlags(
-        autoPlay: true,
-        mute: false,
-        enableCaption: false,
-        hideControls: false,
-        hideThumbnail: true,
-        forceHD: false,
-        controlsVisibleAtStart: true,
-      ),
-    );
+  void _setupWebViewPlayer(String type, String videoId) {
+    if (videoId.isEmpty) {
+      setState(() {
+        _error = 'Invalid video ID';
+        _isLoading = false;
+      });
+      return;
+    }
 
     setState(() {
-      _playerType = 'youtube';
+      _playerType = type;
       _isLoading = false;
+    });
+
+    // Hide splash after 2 seconds (video should start loading by then)
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) _splashAnimController.forward();
     });
   }
 
-  void _initializeVimeoPlayer(String vimeoId) {
-    print('Initializing Vimeo player for ID: $vimeoId');
-    // Vimeo doesn't have a good native Flutter player
-    // Store the URL and show a play button to open externally
-    _vimeoUrl = 'https://vimeo.com/$vimeoId';
+  String _getYouTubeEmbedHtml(String videoId) {
+    return '''
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+    .video-container { position: relative; width: 100%; height: 100%; }
+    iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }
+  </style>
+</head>
+<body>
+  <div class="video-container">
+    <iframe
+      src="https://www.youtube.com/embed/$videoId?autoplay=1&playsinline=1&rel=0&modestbranding=1&fs=1&enablejsapi=1"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+      allowfullscreen
+      frameborder="0">
+    </iframe>
+  </div>
+</body>
+</html>
+''';
+  }
 
-    setState(() {
-      _playerType = 'vimeo';
-      _isLoading = false;
-    });
+  String _getVimeoEmbedHtml(String videoId) {
+    return '''
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+    .video-container { position: relative; width: 100%; height: 100%; }
+    iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }
+  </style>
+</head>
+<body>
+  <div class="video-container">
+    <iframe
+      src="https://player.vimeo.com/video/$videoId?autoplay=1&playsinline=1&title=0&byline=0&portrait=0"
+      allow="autoplay; fullscreen; picture-in-picture"
+      allowfullscreen>
+    </iframe>
+  </div>
+</body>
+</html>
+''';
+  }
+
+  String? _extractYouTubeIdFromUrl(String url) {
+    final patterns = [
+      RegExp(r'youtu\.be/([a-zA-Z0-9_-]{11})'),
+      RegExp(r'youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})'),
+      RegExp(r'youtube\.com/embed/([a-zA-Z0-9_-]{11})'),
+      RegExp(r'youtube\.com/v/([a-zA-Z0-9_-]{11})'),
+    ];
+
+    for (final pattern in patterns) {
+      final match = pattern.firstMatch(url);
+      if (match != null) {
+        return match.group(1);
+      }
+    }
+    return null;
   }
 
   String? _extractVimeoId(String url) {
@@ -170,8 +292,12 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         _playerType = 'native';
         _isLoading = false;
       });
+
+      // Hide splash after 1 second for native player (already buffered)
+      Future.delayed(const Duration(seconds: 1), () {
+        if (mounted) _splashAnimController.forward();
+      });
     } catch (e) {
-      print('Error initializing native player: $e');
       setState(() {
         _error = 'Failed to load video: $e';
         _isLoading = false;
@@ -179,67 +305,28 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     }
   }
 
-  void _openVimeoExternal() async {
-    if (_vimeoUrl != null) {
-      try {
-        final uri = Uri.parse(_vimeoUrl!);
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } catch (e) {
-        print('Error opening Vimeo: $e');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Could not open Vimeo')),
-          );
-        }
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    return YoutubePlayerBuilder(
-      player: _youtubeController != null
-        ? YoutubePlayer(
-            controller: _youtubeController!,
-            showVideoProgressIndicator: true,
-            progressIndicatorColor: Color(AppConfig.primaryColorValue),
-            progressColors: ProgressBarColors(
-              playedColor: Color(AppConfig.primaryColorValue),
-              handleColor: Color(AppConfig.primaryColorValue),
-            ),
-          )
-        : YoutubePlayer(
-            controller: YoutubePlayerController(initialVideoId: ''),
-          ),
-      onEnterFullScreen: () {
-        setState(() => _isFullscreen = true);
-      },
-      onExitFullScreen: () {
-        setState(() => _isFullscreen = false);
-      },
-      builder: (context, player) {
-        return Scaffold(
-          backgroundColor: Colors.black,
-          appBar: _isFullscreen ? null : AppBar(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back),
-              onPressed: () => Navigator.pop(context),
-            ),
-            title: Text(
-              widget.video.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          body: _buildBody(player),
-        );
-      },
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: _isFullscreen ? null : AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          widget.video.title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+      body: _buildBody(),
     );
   }
 
-  Widget _buildBody(Widget youtubePlayer) {
+  Widget _buildBody() {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -252,7 +339,12 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       children: [
         AspectRatio(
           aspectRatio: 16 / 9,
-          child: _buildVideoPlayer(youtubePlayer),
+          child: Stack(
+            children: [
+              _buildVideoPlayer(),
+              if (_showSplash) _buildSplashOverlay(),
+            ],
+          ),
         ),
         if (!_isFullscreen)
           Expanded(child: _buildVideoInfo()),
@@ -260,13 +352,98 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     );
   }
 
-  Widget _buildVideoPlayer(Widget youtubePlayer) {
-    if (_playerType == 'youtube' && _youtubeController != null) {
-      return youtubePlayer;
-    }
+  Widget _buildSplashOverlay() {
+    return AnimatedBuilder(
+      animation: _splashFadeAnimation,
+      builder: (context, child) {
+        return Opacity(
+          opacity: _splashFadeAnimation.value.clamp(0.0, 1.0),
+          child: Container(
+            color: Colors.black,
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Image.asset(
+                    'assets/images/logo.png',
+                    width: 80,
+                    fit: BoxFit.contain,
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'JKTV Live',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '24/7 The Voice of Voiceless',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.white.withOpacity(0.7),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        Color(AppConfig.primaryColorValue),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 
-    if (_playerType == 'vimeo') {
-      return _buildVimeoPlayer();
+  Widget _buildVideoPlayer() {
+    if ((_playerType == 'youtube' || _playerType == 'vimeo') && !_isLoading) {
+      final videoId = _playerType == 'youtube'
+          ? (widget.video.youtubeId ?? _extractYouTubeIdFromUrl(widget.video.embedUrl ?? '') ?? '')
+          : (widget.video.vimeoId ?? _extractVimeoId(widget.video.embedUrl ?? '') ?? '');
+
+      final htmlContent = _playerType == 'youtube'
+          ? _getYouTubeEmbedHtml(videoId)
+          : _getVimeoEmbedHtml(videoId);
+
+      return InAppWebView(
+        initialData: InAppWebViewInitialData(
+          data: htmlContent,
+          mimeType: 'text/html',
+          encoding: 'utf-8',
+          baseUrl: WebUri('https://jammukashmir.tv'),
+        ),
+        initialSettings: _webViewSettings,
+        onWebViewCreated: (controller) {
+          _webViewController = controller;
+        },
+        shouldOverrideUrlLoading: (controller, navigationAction) async {
+          final url = navigationAction.request.url?.toString() ?? '';
+          // Block any navigation away from the embed (prevents opening YouTube app)
+          if (url.startsWith('intent://') ||
+              url.startsWith('vnd.youtube:') ||
+              url.startsWith('youtube:') ||
+              url.contains('youtube.com/redirect') ||
+              url.contains('accounts.google.com')) {
+            return NavigationActionPolicy.CANCEL;
+          }
+          // Allow YouTube and Vimeo embed URLs
+          if (url.contains('youtube.com') || url.contains('vimeo.com') || url.contains('googlevideo.com')) {
+            return NavigationActionPolicy.ALLOW;
+          }
+          return NavigationActionPolicy.CANCEL;
+        },
+      );
     }
 
     if (_playerType == 'native' && _chewieController != null) {
@@ -276,43 +453,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     return Container(
       color: Colors.black,
       child: const Center(child: CircularProgressIndicator()),
-    );
-  }
-
-  Widget _buildVimeoPlayer() {
-    return Container(
-      color: Colors.black,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // Show video thumbnail if available
-          if (widget.video.poster.isNotEmpty)
-            Image.network(
-              widget.video.poster,
-              fit: BoxFit.cover,
-              width: double.infinity,
-              height: double.infinity,
-              errorBuilder: (context, error, stackTrace) => Container(color: Colors.black),
-            ),
-          // Dark overlay
-          Container(color: Colors.black54),
-          // Play button
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              IconButton(
-                onPressed: _openVimeoExternal,
-                icon: const Icon(Icons.play_circle_fill, size: 80, color: Colors.white),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Tap to play on Vimeo',
-                style: TextStyle(color: Colors.white70, fontSize: 16),
-              ),
-            ],
-          ),
-        ],
-      ),
     );
   }
 
@@ -344,6 +484,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   }
 
   Widget _buildVideoInfo() {
+    final videoUrl = 'https://jammukashmir.tv/index.php/video/${widget.video.id}/${widget.video.titleUrl}/';
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -383,6 +525,43 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
               ],
             ),
           ],
+          const SizedBox(height: 16),
+          const Divider(color: Colors.white24),
+          const SizedBox(height: 12),
+          const Text('Share', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: [
+              _buildShareButton(
+                icon: Icons.share,
+                color: Color(AppConfig.primaryColorValue),
+                label: 'Share',
+                onTap: () => SocialShare.shareGeneral(videoUrl, widget.video.title),
+              ),
+              const SizedBox(width: 12),
+              _buildShareButton(
+                icon: Icons.message,
+                color: const Color(0xFF25D366),
+                label: 'WhatsApp',
+                onTap: () => SocialShare.shareToWhatsApp(videoUrl, widget.video.title),
+              ),
+              const SizedBox(width: 12),
+              _buildShareButton(
+                icon: Icons.send,
+                color: const Color(0xFF0088CC),
+                label: 'Telegram',
+                onTap: () => SocialShare.shareToTelegram(videoUrl, widget.video.title),
+              ),
+              const SizedBox(width: 12),
+              _buildShareButton(
+                icon: Icons.link,
+                color: Colors.grey,
+                label: 'Copy',
+                onTap: () => SocialShare.copyLink(context, videoUrl),
+              ),
+            ],
+          ),
           if (widget.video.description.isNotEmpty) ...[
             const SizedBox(height: 16),
             const Divider(color: Colors.white24),
@@ -394,9 +573,36 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     );
   }
 
+  Widget _buildShareButton({
+    required IconData icon,
+    required Color color,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Column(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: color, size: 24),
+          ),
+          const SizedBox(height: 4),
+          Text(label, style: const TextStyle(fontSize: 10, color: Colors.white70)),
+        ],
+      ),
+    );
+  }
+
   @override
   void dispose() {
-    _youtubeController?.dispose();
+    _splashAnimController.dispose();
     _chewieController?.dispose();
     _videoController?.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);

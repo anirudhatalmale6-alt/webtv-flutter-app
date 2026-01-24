@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../config/app_config.dart';
 import '../api/webtv_api.dart';
 import '../models/category.dart';
@@ -10,6 +9,14 @@ import '../widgets/browse_videos_section.dart';
 import 'search_screen.dart';
 import 'video_player_screen.dart';
 import 'login_screen.dart';
+import 'live_tv_screen.dart';
+import 'webview_screen.dart';
+import 'introduction_screen.dart';
+import 'who_we_are_screen.dart';
+import 'contact_screen.dart';
+import 'advertise_screen.dart';
+import 'support_screen.dart';
+import 'category_videos_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -179,60 +186,37 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _openLiveTV() async {
-    try {
-      final url = Uri.parse('https://jktv.live');
-      await launchUrl(url, mode: LaunchMode.externalApplication);
-    } catch (e) {
-      print('Error opening Live TV: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open Live TV')),
-        );
-      }
-    }
+  void _openLiveTV() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const LiveTVScreen()),
+    );
   }
 
-  void _openContact() async {
-    try {
-      final url = Uri.parse('mailto:contact@jktv.live');
-      await launchUrl(url);
-    } catch (e) {
-      print('Error opening email: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Email: contact@jktv.live')),
-        );
-      }
-    }
+  void _openContact() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ContactScreen()),
+    );
   }
 
-  void _openSupportUs() async {
-    try {
-      final url = Uri.parse('https://jktv.live');
-      await launchUrl(url, mode: LaunchMode.externalApplication);
-    } catch (e) {
-      print('Error opening Support page: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open Support page')),
-        );
-      }
-    }
+  void _openSupportUs() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const SupportScreen()),
+    );
   }
 
-  void _openWebsite(String path) async {
-    try {
-      final url = Uri.parse('https://jammukashmir.tv$path');
-      await launchUrl(url, mode: LaunchMode.externalApplication);
-    } catch (e) {
-      print('Error opening website: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open website')),
-        );
-      }
-    }
+  void _openWebsite(String path, String title) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => WebViewScreen(
+          title: title,
+          url: 'https://jammukashmir.tv$path',
+        ),
+      ),
+    );
   }
 
   Widget _buildMenu() {
@@ -281,15 +265,18 @@ class _HomeScreenState extends State<HomeScreen> {
               title: const Text('News', style: TextStyle(color: Colors.white)),
               onTap: () {
                 Navigator.pop(context);
-                _openWebsite('/index.php/category/11/news-update/');
+                _openWebsite('/index.php/category/11/news-update/', 'News');
               },
             ),
             ListTile(
               leading: const Icon(Icons.info, color: Colors.white),
-              title: const Text('Introduction', style: TextStyle(color: Colors.white)),
+              title: const Text('About Us', style: TextStyle(color: Colors.white)),
               onTap: () {
                 Navigator.pop(context);
-                _openWebsite('/index.php/channel/1/jktv/');
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const IntroductionScreen()),
+                );
               },
             ),
             ListTile(
@@ -297,7 +284,10 @@ class _HomeScreenState extends State<HomeScreen> {
               title: const Text('Who We Are', style: TextStyle(color: Colors.white)),
               onTap: () {
                 Navigator.pop(context);
-                _openWebsite('/index.php/channel/1/jktv/');
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const WhoWeAreScreen()),
+                );
               },
             ),
             const Divider(color: Colors.white24),
@@ -317,6 +307,17 @@ class _HomeScreenState extends State<HomeScreen> {
               onTap: () {
                 Navigator.pop(context);
                 _openSupportUs();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.campaign, color: Colors.orange),
+              title: const Text('Advertise With Us', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const AdvertiseScreen()),
+                );
               },
             ),
             if (AppConfig.showLoginButton) ...[
@@ -395,25 +396,14 @@ class _HomeScreenState extends State<HomeScreen> {
             : Colors.black.withOpacity(0.9),
         leading: Padding(
           padding: const EdgeInsets.all(8.0),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Color(AppConfig.primaryColorValue),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Center(
-              child: Text(
-                AppConfig.appName.substring(0, 2).toUpperCase(),
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-            ),
+          child: Image.asset(
+            'assets/images/logo.png',
+            fit: BoxFit.contain,
           ),
         ),
-        title: Text(
-          AppConfig.appName,
-          style: const TextStyle(
+        title: const Text(
+          'JKTV Live',
+          style: TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 20,
           ),
@@ -516,6 +506,17 @@ class _HomeScreenState extends State<HomeScreen> {
                           title: category.title,
                           videos: videos,
                           onVideoTap: _openVideo,
+                          onSeeAll: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => CategoryVideosScreen(
+                                  categoryId: category.id,
+                                  categoryTitle: category.title,
+                                ),
+                              ),
+                            );
+                          },
                         );
                       },
                       childCount: _categories.length,

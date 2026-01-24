@@ -46,17 +46,39 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   void _openVideo(Video video) async {
-    final fullVideo = await _api.getVideo(video.id);
-    if (fullVideo != null && fullVideo.mediaUrl != null) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => VideoPlayerScreen(video: fullVideo),
-        ),
-      );
-    } else {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final fullVideo = await _api.getVideo(video.id);
+      if (mounted) Navigator.of(context).pop();
+
+      if (fullVideo != null) {
+        final canPlay = fullVideo.mediaUrl != null ||
+            fullVideo.youtubeId != null ||
+            fullVideo.vimeoId != null ||
+            fullVideo.embedUrl != null;
+        if (canPlay) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => VideoPlayerScreen(video: fullVideo),
+            ),
+          );
+          return;
+        }
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Unable to load video')),
+      );
+    } catch (e) {
+      if (mounted) Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
       );
     }
   }

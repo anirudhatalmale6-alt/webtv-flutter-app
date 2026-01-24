@@ -1,7 +1,7 @@
 name: webtv_app
 description: Netflix-style VOD app for WebTV Solutions CMS
 publish_to: 'none'
-version: 2.0.25+25
+version: 2.0.47+47
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -22,9 +22,8 @@ dependencies:
   firebase_core: ^2.24.2
   firebase_messaging: ^14.7.9
   url_launcher: ^6.2.2
-  webview_flutter: ^4.4.2
-  flutter_inappwebview: ^5.8.0
-  youtube_player_flutter: ^8.1.2
+  flutter_inappwebview: ^6.0.0
+  share_plus: ^7.2.1
 
 dev_dependencies:
   flutter_test:

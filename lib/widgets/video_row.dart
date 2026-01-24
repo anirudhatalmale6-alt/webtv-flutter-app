@@ -6,12 +6,14 @@ class VideoRow extends StatelessWidget {
   final String title;
   final List<Video> videos;
   final Function(Video) onVideoTap;
+  final VoidCallback? onSeeAll;
 
   const VideoRow({
     super.key,
     required this.title,
     required this.videos,
     required this.onVideoTap,
+    this.onSeeAll,
   });
 
   @override
@@ -21,12 +23,33 @@ class VideoRow extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
-          child: Text(
-            title,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
+          child: GestureDetector(
+            onTap: onSeeAll,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                if (onSeeAll != null)
+                  const Row(
+                    children: [
+                      Text(
+                        'See All',
+                        style: TextStyle(fontSize: 13, color: Colors.white54),
+                      ),
+                      SizedBox(width: 4),
+                      Icon(Icons.arrow_forward_ios, size: 12, color: Colors.white54),
+                    ],
+                  ),
+              ],
             ),
           ),
         ),

@@ -18,10 +18,10 @@ class AppConfig {
   static const String apiBaseUrl = 'http://jammukashmir.tv';
 
   /// App display name
-  static const String appName = 'JKTV';
+  static const String appName = 'JKTV Live';
 
   /// App tagline
-  static const String appTagline = 'Kashmir\'s First Independent WebTV';
+  static const String appTagline = '24/7 The Voice of Voiceless';
 
   /// Primary color (hex without #)
   static const int primaryColorValue = 0xFF1E88E5; // Blue
@@ -39,7 +39,7 @@ class AppConfig {
   static const String? liveStreamUrl = null;
 
   /// App version
-  static const String appVersion = '2.0.25';
+  static const String appVersion = '2.0.47';
 
   // ===========================================
   // API CREDENTIALS - From WebTV Solutions

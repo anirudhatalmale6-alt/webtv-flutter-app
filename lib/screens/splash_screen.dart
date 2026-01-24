@@ -84,29 +84,16 @@ class _SplashScreenState extends State<SplashScreen>
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Logo placeholder
-                    Container(
-                      width: 120,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        color: Color(AppConfig.primaryColorValue),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Center(
-                        child: Text(
-                          AppConfig.appName.substring(0, 2).toUpperCase(),
-                          style: const TextStyle(
-                            fontSize: 48,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
+                    // JKTV Logo
+                    Image.asset(
+                      'assets/images/logo.png',
+                      width: 180,
+                      fit: BoxFit.contain,
                     ),
                     const SizedBox(height: 24),
-                    Text(
-                      AppConfig.appName,
-                      style: const TextStyle(
+                    const Text(
+                      'JKTV Live',
+                      style: TextStyle(
                         fontSize: 32,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
