@@ -34,7 +34,6 @@ migrate_working_dir/
 **/android/gradlew.bat
 **/android/local.properties
 **/android/**/GeneratedPluginRegistrant.java
-**/android/app/src/main/res/values/ic_launcher_background.xml
 
 # iOS/XCode related
 **/ios/**/*.mode1v3
