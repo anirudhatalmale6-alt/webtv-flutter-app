@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "315122077437",
+    "project_id": "jktv-live-d6bef",
+    "storage_bucket": "jktv-live-d6bef.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:315122077437:android:f5de60a4183c8cca8db894",
+        "android_client_info": {
+          "package_name": "com.webtvsolutions.jktv"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBFYAavCsGZrmN32yzpr8wvImCQAcbfN0Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
