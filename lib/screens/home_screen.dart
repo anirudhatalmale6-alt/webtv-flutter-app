@@ -17,6 +17,7 @@ import 'contact_screen.dart';
 import 'advertise_screen.dart';
 import 'support_screen.dart';
 import 'category_videos_screen.dart';
+import 'mission_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -287,6 +288,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => const WhoWeAreScreen()),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.flag, color: Colors.white),
+              title: const Text('Mission Statement', style: TextStyle(color: Colors.white)),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const MissionScreen()),
                 );
               },
             ),
