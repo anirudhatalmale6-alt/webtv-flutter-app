@@ -146,7 +146,7 @@ class WhoWeAreScreen extends StatelessWidget {
             const SizedBox(height: 10),
             _buildTeamMember('Shams Rehman', 'Director Programming'),
             const SizedBox(height: 10),
-            _buildTeamMember('Salamat Hussain', 'Director News & Editor in Chief'),
+            _buildTeamMember('Salamat Hussain', 'Director'),
             const SizedBox(height: 10),
             _buildTeamMember('Kabir Ahmed', 'Director Public Affairs'),
             const SizedBox(height: 10),
