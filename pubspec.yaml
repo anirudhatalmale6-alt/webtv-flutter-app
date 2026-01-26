@@ -1,7 +1,7 @@
 name: webtv_app
 description: Netflix-style VOD app for WebTV Solutions CMS
 publish_to: 'none'
-version: 2.0.52+52
+version: 2.0.54+54
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -37,3 +37,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
+    - assets/videos/
