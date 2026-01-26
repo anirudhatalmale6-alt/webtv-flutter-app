@@ -16,26 +16,23 @@ class _SplashScreenState extends State<SplashScreen> {
   VideoPlayerController? _videoController;
   bool _isVideoInitialized = false;
   bool _videoError = false;
+  bool _showVideo = false; // Start with logo, show video after tap
 
   @override
   void initState() {
     super.initState();
-    _initializeVideo();
+    _preloadVideo();
   }
 
-  Future<void> _initializeVideo() async {
+  Future<void> _preloadVideo() async {
     try {
       _videoController = VideoPlayerController.asset('assets/videos/intro.mp4');
-
       await _videoController!.initialize();
 
       if (mounted) {
         setState(() {
           _isVideoInitialized = true;
         });
-
-        // Play the video
-        _videoController!.play();
 
         // Listen for video completion
         _videoController!.addListener(_videoListener);
@@ -45,10 +42,6 @@ class _SplashScreenState extends State<SplashScreen> {
       if (mounted) {
         setState(() {
           _videoError = true;
-        });
-        // If video fails, navigate after a short delay
-        Future.delayed(const Duration(seconds: 2), () {
-          if (mounted) _navigateToNextScreen();
         });
       }
     }
@@ -60,6 +53,24 @@ class _SplashScreenState extends State<SplashScreen> {
         _videoController!.value.position >= _videoController!.value.duration) {
       // Video finished, navigate to next screen
       _navigateToNextScreen();
+    }
+  }
+
+  void _onTapScreen() {
+    if (_showVideo) {
+      // If video is playing, skip to next screen
+      _navigateToNextScreen();
+    } else {
+      // Show and play the video
+      if (_isVideoInitialized && !_videoError) {
+        setState(() {
+          _showVideo = true;
+        });
+        _videoController!.play();
+      } else {
+        // Video not ready or error, go to next screen
+        _navigateToNextScreen();
+      }
     }
   }
 
@@ -98,10 +109,10 @@ class _SplashScreenState extends State<SplashScreen> {
     return Scaffold(
       backgroundColor: Colors.black,
       body: GestureDetector(
-        onTap: _navigateToNextScreen, // Allow tap to skip
-        child: _isVideoInitialized && !_videoError
+        onTap: _onTapScreen,
+        child: _showVideo && _isVideoInitialized && !_videoError
             ? _buildVideoPlayer()
-            : _buildFallbackSplash(),
+            : _buildLogoSplash(),
       ),
     );
   }
@@ -115,8 +126,7 @@ class _SplashScreenState extends State<SplashScreen> {
     );
   }
 
-  Widget _buildFallbackSplash() {
-    // Fallback splash if video fails to load
+  Widget _buildLogoSplash() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -137,14 +147,12 @@ class _SplashScreenState extends State<SplashScreen> {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 48),
-          SizedBox(
-            width: 24,
-            height: 24,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              valueColor: AlwaysStoppedAnimation<Color>(
-                Color(AppConfig.primaryColorValue),
-              ),
+          Text(
+            'Tap to continue',
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.white.withOpacity(0.9),
+              fontWeight: FontWeight.w500,
             ),
           ),
         ],
