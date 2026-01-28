@@ -39,7 +39,7 @@ class AppConfig {
   static const String? liveStreamUrl = null;
 
   /// App version
-  static const String appVersion = '2.0.59';
+  static const String appVersion = '2.0.60';
 
   // ===========================================
   // API CREDENTIALS - From WebTV Solutions

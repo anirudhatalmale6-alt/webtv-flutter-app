@@ -307,9 +307,13 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Auto-fullscreen in landscape mode
+    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+    final showFullscreen = isLandscape || _isFullscreen;
+
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: _isFullscreen ? null : AppBar(
+      appBar: showFullscreen ? null : AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
@@ -322,7 +326,32 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
           overflow: TextOverflow.ellipsis,
         ),
       ),
-      body: _buildBody(),
+      body: showFullscreen ? _buildFullscreenPlayer() : _buildBody(),
+    );
+  }
+
+  Widget _buildFullscreenPlayer() {
+    return GestureDetector(
+      onTap: () {
+        // Toggle controls visibility can be added here
+      },
+      child: Stack(
+        children: [
+          SizedBox.expand(
+            child: _buildVideoPlayer(),
+          ),
+          if (_showSplash) _buildSplashOverlay(),
+          // Back button in fullscreen
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 8,
+            left: 8,
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -364,10 +393,17 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Image.asset(
-                    'assets/images/logo.png',
-                    width: 80,
-                    fit: BoxFit.contain,
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Image.asset(
+                      'assets/images/logo.png',
+                      width: 80,
+                      fit: BoxFit.contain,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   const Text(

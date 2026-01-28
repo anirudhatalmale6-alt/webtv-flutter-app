@@ -111,10 +111,15 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Widget _buildVideoPlayer() {
-    return Center(
-      child: AspectRatio(
-        aspectRatio: _videoController!.value.aspectRatio,
-        child: VideoPlayer(_videoController!),
+    // Play video in fullscreen, covering the entire screen
+    return SizedBox.expand(
+      child: FittedBox(
+        fit: BoxFit.cover,
+        child: SizedBox(
+          width: _videoController!.value.size.width,
+          height: _videoController!.value.size.height,
+          child: VideoPlayer(_videoController!),
+        ),
       ),
     );
   }
@@ -124,11 +129,18 @@ class _SplashScreenState extends State<SplashScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // JKTV Logo while loading
-          Image.asset(
-            'assets/images/logo.png',
-            width: 220,
-            fit: BoxFit.contain,
+          // JKTV Logo with white background
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Image.asset(
+              'assets/images/logo.png',
+              width: 200,
+              fit: BoxFit.contain,
+            ),
           ),
           const SizedBox(height: 24),
           if (!_videoError)

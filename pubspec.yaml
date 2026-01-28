@@ -1,7 +1,7 @@
 name: webtv_app
 description: Netflix-style VOD app for WebTV Solutions CMS
 publish_to: 'none'
-version: 2.0.59+59
+version: 2.0.60+60
 
 environment:
   sdk: '>=3.0.0 <4.0.0'

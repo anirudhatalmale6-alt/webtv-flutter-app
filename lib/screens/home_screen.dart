@@ -407,10 +407,17 @@ class _HomeScreenState extends State<HomeScreen> {
             ? Colors.transparent
             : Colors.black.withOpacity(0.9),
         leading: Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Image.asset(
-            'assets/images/logo.png',
-            fit: BoxFit.contain,
+          padding: const EdgeInsets.all(6.0),
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Image.asset(
+              'assets/images/logo.png',
+              fit: BoxFit.contain,
+            ),
           ),
         ),
         title: const Text(
