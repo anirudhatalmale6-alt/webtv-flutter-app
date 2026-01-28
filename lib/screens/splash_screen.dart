@@ -16,15 +16,14 @@ class _SplashScreenState extends State<SplashScreen> {
   VideoPlayerController? _videoController;
   bool _isVideoInitialized = false;
   bool _videoError = false;
-  bool _showVideo = false; // Start with logo, show video after tap
 
   @override
   void initState() {
     super.initState();
-    _preloadVideo();
+    _initializeVideo();
   }
 
-  Future<void> _preloadVideo() async {
+  Future<void> _initializeVideo() async {
     try {
       _videoController = VideoPlayerController.asset('assets/videos/intro.mp4');
       await _videoController!.initialize();
@@ -36,12 +35,19 @@ class _SplashScreenState extends State<SplashScreen> {
 
         // Listen for video completion
         _videoController!.addListener(_videoListener);
+
+        // Auto-play the video immediately
+        _videoController!.play();
       }
     } catch (e) {
       print('Error initializing video: $e');
       if (mounted) {
         setState(() {
           _videoError = true;
+        });
+        // If video fails, go to next screen after a short delay
+        Future.delayed(const Duration(seconds: 2), () {
+          _navigateToNextScreen();
         });
       }
     }
@@ -57,21 +63,8 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   void _onTapScreen() {
-    if (_showVideo) {
-      // If video is playing, skip to next screen
-      _navigateToNextScreen();
-    } else {
-      // Show and play the video
-      if (_isVideoInitialized && !_videoError) {
-        setState(() {
-          _showVideo = true;
-        });
-        _videoController!.play();
-      } else {
-        // Video not ready or error, go to next screen
-        _navigateToNextScreen();
-      }
-    }
+    // Tap to skip the video
+    _navigateToNextScreen();
   }
 
   void _navigateToNextScreen() {
@@ -110,9 +103,9 @@ class _SplashScreenState extends State<SplashScreen> {
       backgroundColor: Colors.black,
       body: GestureDetector(
         onTap: _onTapScreen,
-        child: _showVideo && _isVideoInitialized && !_videoError
+        child: _isVideoInitialized && !_videoError
             ? _buildVideoPlayer()
-            : _buildLogoSplash(),
+            : _buildLoadingSplash(),
       ),
     );
   }
@@ -126,35 +119,22 @@ class _SplashScreenState extends State<SplashScreen> {
     );
   }
 
-  Widget _buildLogoSplash() {
+  Widget _buildLoadingSplash() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // JKTV Logo
+          // JKTV Logo while loading
           Image.asset(
             'assets/images/logo.png',
             width: 220,
             fit: BoxFit.contain,
           ),
           const SizedBox(height: 24),
-          Text(
-            AppConfig.appTagline,
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.white.withOpacity(0.7),
+          if (!_videoError)
+            const CircularProgressIndicator(
+              color: Colors.white,
             ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 48),
-          Text(
-            'Tap to continue',
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.white.withOpacity(0.9),
-              fontWeight: FontWeight.w500,
-            ),
-          ),
         ],
       ),
     );
