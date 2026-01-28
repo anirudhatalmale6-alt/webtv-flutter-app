@@ -37,10 +37,12 @@ void main() async {
     sound: true,
   );
 
-  // Set preferred orientations
+  // Allow all orientations for TV/tablet support
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
   ]);
 
   // Set status bar style
