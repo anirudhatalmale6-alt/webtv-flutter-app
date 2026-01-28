@@ -31,7 +31,7 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace "com.webtvsolutions.jktv"
-    compileSdk 35
+    compileSdk 36
     buildToolsVersion "35.0.0"
     ndkVersion flutter.ndkVersion
 
