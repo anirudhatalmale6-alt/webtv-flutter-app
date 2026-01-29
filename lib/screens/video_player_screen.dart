@@ -642,9 +642,12 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     _chewieController?.dispose();
     _videoController?.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    // Allow all orientations for TV/tablet support
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
     ]);
     super.dispose();
   }

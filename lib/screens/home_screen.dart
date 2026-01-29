@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../config/app_config.dart';
 import '../api/webtv_api.dart';
 import '../models/category.dart';
@@ -400,7 +401,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return Shortcuts(
+      shortcuts: <LogicalKeySet, Intent>{
+        LogicalKeySet(LogicalKeyboardKey.select): const ActivateIntent(),
+        LogicalKeySet(LogicalKeyboardKey.enter): const ActivateIntent(),
+        LogicalKeySet(LogicalKeyboardKey.gameButtonA): const ActivateIntent(),
+      },
+      child: Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: _isAppBarTransparent
@@ -428,13 +435,21 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: _openSearch,
+          Focus(
+            canRequestFocus: true,
+            child: IconButton(
+              icon: const Icon(Icons.search),
+              onPressed: _openSearch,
+              tooltip: 'Search',
+            ),
           ),
-          IconButton(
-            icon: const Icon(Icons.menu),
-            onPressed: _openMenu,
+          Focus(
+            canRequestFocus: true,
+            child: IconButton(
+              icon: const Icon(Icons.menu),
+              onPressed: _openMenu,
+              tooltip: 'Menu',
+            ),
           ),
         ],
       ),
@@ -549,6 +564,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
+    ),
     );
   }
 
