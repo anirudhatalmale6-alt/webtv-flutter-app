@@ -112,13 +112,12 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Widget _buildVideoPlayer() {
-    // Play video in fullscreen, covering the entire screen
-    return SizedBox.expand(
-      child: FittedBox(
-        fit: BoxFit.cover,
-        child: SizedBox(
-          width: _videoController!.value.size.width,
-          height: _videoController!.value.size.height,
+    // Play video centered with proper aspect ratio
+    return Container(
+      color: Colors.black,
+      child: Center(
+        child: AspectRatio(
+          aspectRatio: _videoController!.value.aspectRatio,
           child: VideoPlayer(_videoController!),
         ),
       ),
