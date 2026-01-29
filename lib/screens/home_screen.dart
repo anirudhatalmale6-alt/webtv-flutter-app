@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../config/app_config.dart';
+import 'selection_screen.dart';
 import '../api/webtv_api.dart';
 import '../models/category.dart';
 import '../models/video.dart';
@@ -442,7 +443,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return FocusTraversalGroup(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const SelectionScreen()),
+          );
+        }
+      },
+      child: FocusTraversalGroup(
       policy: OrderedTraversalPolicy(),
       child: Shortcuts(
       shortcuts: <LogicalKeySet, Intent>{
@@ -601,6 +612,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
+    ),
     ),
     ),
     );

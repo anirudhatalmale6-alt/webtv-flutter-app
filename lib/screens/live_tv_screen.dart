@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:share_plus/share_plus.dart';
+import 'selection_screen.dart';
 
 class LiveTVScreen extends StatefulWidget {
   const LiveTVScreen({super.key});
@@ -85,7 +86,15 @@ class _LiveTVScreenState extends State<LiveTVScreen> {
 
     // Handle back button press on TV remote
     return PopScope(
-      canPop: true,
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const SelectionScreen()),
+          );
+        }
+      },
       child: Scaffold(
         backgroundColor: Colors.black,
         appBar: isLandscape ? null : AppBar(
@@ -93,7 +102,10 @@ class _LiveTVScreenState extends State<LiveTVScreen> {
           elevation: 0,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const SelectionScreen()),
+            ),
           ),
           title: Row(
             children: [

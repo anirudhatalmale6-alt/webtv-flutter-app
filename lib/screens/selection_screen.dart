@@ -48,21 +48,6 @@ class _SelectionScreenState extends State<SelectionScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Logo at top
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Image.asset(
-                  'assets/images/logo.png',
-                  width: isLandscape ? 150 : 180,
-                  fit: BoxFit.contain,
-                ),
-              ),
-              SizedBox(height: isLandscape ? 30 : 50),
-
               // Options
               isLandscape
                   ? Row(
