@@ -28,7 +28,7 @@ class _LiveTVScreenState extends State<LiveTVScreen> {
     userAgent: 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
   );
 
-  // CSS to hide jktv.live header/nav/footer and show only player + share
+  // CSS to hide jktv.live header/nav/footer, quality selector, and show only video
   static const String _hideHeaderCss = '''
     .site-header, .site-nav, .nav-logo, .nav-links, footer,
     .site-footer, .footer, nav, header {
@@ -53,6 +53,13 @@ class _LiveTVScreenState extends State<LiveTVScreen> {
       top: 0 !important;
       left: 0 !important;
     }
+    /* Hide video player controls like Auto quality selector */
+    .vjs-quality-selector, .vjs-menu-button-popup,
+    .vjs-settings-menu, .vjs-quality-menu,
+    [class*="quality"], [class*="settings"],
+    .vjs-menu, .vjs-control-bar {
+      display: none !important;
+    }
   ''';
 
   void _injectCss(InAppWebViewController controller) {
@@ -76,80 +83,75 @@ class _LiveTVScreenState extends State<LiveTVScreen> {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     }
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: isLandscape ? null : AppBar(
+    // Handle back button press on TV remote
+    return PopScope(
+      canPop: true,
+      child: Scaffold(
         backgroundColor: Colors.black,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Row(
-          children: [
-            Container(
-              width: 8,
-              height: 8,
-              decoration: const BoxDecoration(
-                color: Colors.red,
-                shape: BoxShape.circle,
+        appBar: isLandscape ? null : AppBar(
+          backgroundColor: Colors.black,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  color: Colors.red,
+                  shape: BoxShape.circle,
+                ),
               ),
+              const SizedBox(width: 8),
+              const Text('JKTV Live'),
+            ],
+          ),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.share),
+              onPressed: () {
+                Share.share('Watch JKTV Live - Kashmir\'s First Independent WebTV\nhttps://jktv.live');
+              },
             ),
-            const SizedBox(width: 8),
-            const Text('JKTV Live'),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.share),
-            onPressed: () {
-              Share.share('Watch JKTV Live - Kashmir\'s First Independent WebTV\nhttps://jktv.live');
-            },
-          ),
-        ],
-      ),
-      body: Stack(
-        children: [
-          InAppWebView(
-            initialUrlRequest: URLRequest(url: WebUri('https://jktv.live')),
-            initialSettings: _webViewSettings,
-            onWebViewCreated: (controller) {
-              _webViewController = controller;
-            },
-            onLoadStop: (controller, url) {
-              _injectCss(controller);
-              setState(() => _isLoading = false);
-            },
-            shouldOverrideUrlLoading: (controller, navigationAction) async {
-              final url = navigationAction.request.url?.toString() ?? '';
-              // Allow jktv.live and related CDN/streaming domains
-              if (url.contains('jktv.live') ||
-                  url.contains('jammukashmir.tv') ||
-                  url.contains('googlevideo.com') ||
-                  url.contains('googleapis.com') ||
-                  url.contains('vjs.zencdn.net') ||
-                  url.contains('cdn.') ||
-                  url.startsWith('blob:') ||
-                  url.startsWith('data:')) {
-                return NavigationActionPolicy.ALLOW;
-              }
-              // Block external navigation
-              return NavigationActionPolicy.CANCEL;
-            },
-          ),
-          if (_isLoading)
-            const Center(child: CircularProgressIndicator()),
-          // Back button overlay in landscape
-          if (isLandscape)
-            Positioned(
-              top: 16,
-              left: 16,
-              child: IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
-                onPressed: () => Navigator.pop(context),
-              ),
+        body: Stack(
+          children: [
+            InAppWebView(
+              initialUrlRequest: URLRequest(url: WebUri('https://jktv.live')),
+              initialSettings: _webViewSettings,
+              onWebViewCreated: (controller) {
+                _webViewController = controller;
+              },
+              onLoadStop: (controller, url) {
+                _injectCss(controller);
+                setState(() => _isLoading = false);
+              },
+              shouldOverrideUrlLoading: (controller, navigationAction) async {
+                final url = navigationAction.request.url?.toString() ?? '';
+                // Allow jktv.live and related CDN/streaming domains
+                if (url.contains('jktv.live') ||
+                    url.contains('jammukashmir.tv') ||
+                    url.contains('googlevideo.com') ||
+                    url.contains('googleapis.com') ||
+                    url.contains('vjs.zencdn.net') ||
+                    url.contains('cdn.') ||
+                    url.startsWith('blob:') ||
+                    url.startsWith('data:')) {
+                  return NavigationActionPolicy.ALLOW;
+                }
+                // Block external navigation
+                return NavigationActionPolicy.CANCEL;
+              },
             ),
-        ],
+            if (_isLoading)
+              const Center(child: CircularProgressIndicator()),
+            // No back button overlay - TV remote back button will work automatically
+          ],
+        ),
       ),
     );
   }
