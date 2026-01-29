@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import '../config/app_config.dart';
 import '../api/webtv_api.dart';
-import 'home_screen.dart';
+import 'selection_screen.dart';
 import 'login_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -75,7 +75,8 @@ class _SplashScreenState extends State<SplashScreen> {
     if (AppConfig.requiresLogin && !WebTVApi().isLoggedIn) {
       nextScreen = const LoginScreen();
     } else {
-      nextScreen = const HomeScreen();
+      // Go to selection screen (JKTV Live or JKTV Play)
+      nextScreen = const SelectionScreen();
     }
 
     Navigator.pushReplacement(
