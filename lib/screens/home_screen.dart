@@ -399,9 +399,52 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildFocusableButton({
+    required IconData icon,
+    required VoidCallback onPressed,
+    required String tooltip,
+  }) {
+    return StatefulBuilder(
+      builder: (context, setState) {
+        bool isFocused = false;
+        return Focus(
+          onFocusChange: (focused) {
+            setState(() => isFocused = focused);
+          },
+          onKeyEvent: (node, event) {
+            if (event is KeyDownEvent) {
+              if (event.logicalKey == LogicalKeyboardKey.select ||
+                  event.logicalKey == LogicalKeyboardKey.enter ||
+                  event.logicalKey == LogicalKeyboardKey.gameButtonA) {
+                onPressed();
+                return KeyEventResult.handled;
+              }
+            }
+            return KeyEventResult.ignored;
+          },
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 4),
+            decoration: BoxDecoration(
+              color: isFocused ? Colors.white.withOpacity(0.3) : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+              border: isFocused ? Border.all(color: Colors.white, width: 2) : null,
+            ),
+            child: IconButton(
+              icon: Icon(icon, color: isFocused ? Colors.white : null),
+              onPressed: onPressed,
+              tooltip: tooltip,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Shortcuts(
+    return FocusTraversalGroup(
+      policy: OrderedTraversalPolicy(),
+      child: Shortcuts(
       shortcuts: <LogicalKeySet, Intent>{
         LogicalKeySet(LogicalKeyboardKey.select): const ActivateIntent(),
         LogicalKeySet(LogicalKeyboardKey.enter): const ActivateIntent(),
@@ -435,21 +478,15 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         actions: [
-          Focus(
-            canRequestFocus: true,
-            child: IconButton(
-              icon: const Icon(Icons.search),
-              onPressed: _openSearch,
-              tooltip: 'Search',
-            ),
+          _buildFocusableButton(
+            icon: Icons.search,
+            onPressed: _openSearch,
+            tooltip: 'Search',
           ),
-          Focus(
-            canRequestFocus: true,
-            child: IconButton(
-              icon: const Icon(Icons.menu),
-              onPressed: _openMenu,
-              tooltip: 'Menu',
-            ),
+          _buildFocusableButton(
+            icon: Icons.menu,
+            onPressed: _openMenu,
+            tooltip: 'Menu',
           ),
         ],
       ),
@@ -564,6 +601,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
+    ),
     ),
     );
   }
