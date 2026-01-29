@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/video.dart';
 import '../config/app_config.dart';
@@ -95,7 +96,7 @@ class _FeaturedCarouselState extends State<FeaturedCarousel> {
   }
 }
 
-class FeaturedCard extends StatelessWidget {
+class FeaturedCard extends StatefulWidget {
   final Video video;
   final VoidCallback onTap;
 
@@ -106,14 +107,45 @@ class FeaturedCard extends StatelessWidget {
   });
 
   @override
+  State<FeaturedCard> createState() => _FeaturedCardState();
+}
+
+class _FeaturedCardState extends State<FeaturedCard> {
+  bool _isFocused = false;
+
+  @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () {
-        print('FeaturedCard tapped: ${video.id} - ${video.title}');
-        onTap();
+    return Focus(
+      autofocus: true,
+      onFocusChange: (focused) {
+        setState(() => _isFocused = focused);
       },
-      child: Container(
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent) {
+          if (event.logicalKey == LogicalKeyboardKey.select ||
+              event.logicalKey == LogicalKeyboardKey.enter ||
+              event.logicalKey == LogicalKeyboardKey.gameButtonA) {
+            widget.onTap();
+            return KeyEventResult.handled;
+          }
+        }
+        return KeyEventResult.ignored;
+      },
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          print('FeaturedCard tapped: ${widget.video.id} - ${widget.video.title}');
+          widget.onTap();
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          transform: _isFocused ? (Matrix4.identity()..scale(1.02)) : Matrix4.identity(),
+          transformAlignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: _isFocused ? Border.all(color: Colors.white, width: 3) : null,
+          ),
+          child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
@@ -132,7 +164,7 @@ class FeaturedCard extends StatelessWidget {
             children: [
               // Background image
               CachedNetworkImage(
-                imageUrl: video.poster.isNotEmpty ? video.poster : video.thumbnail,
+                imageUrl: widget.video.poster.isNotEmpty ? widget.video.poster : widget.video.thumbnail,
                 fit: BoxFit.cover,
                 placeholder: (context, url) => Container(
                   color: Colors.grey[900],
@@ -169,7 +201,7 @@ class FeaturedCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Live badge
-                    if (video.isLive)
+                    if (widget.video.isLive)
                       Container(
                         margin: const EdgeInsets.only(bottom: 8),
                         padding: const EdgeInsets.symmetric(
@@ -198,7 +230,7 @@ class FeaturedCard extends StatelessWidget {
                       ),
                     // Title
                     Text(
-                      video.title,
+                      widget.video.title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -211,7 +243,7 @@ class FeaturedCard extends StatelessWidget {
                     // Meta info
                     Row(
                       children: [
-                        if (video.durationFormatted.isNotEmpty) ...[
+                        if (widget.video.durationFormatted.isNotEmpty) ...[
                           const Icon(
                             Icons.access_time,
                             size: 14,
@@ -219,7 +251,7 @@ class FeaturedCard extends StatelessWidget {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            video.durationFormatted,
+                            widget.video.durationFormatted,
                             style: const TextStyle(
                               fontSize: 12,
                               color: Colors.white70,
@@ -234,7 +266,7 @@ class FeaturedCard extends StatelessWidget {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          video.formattedViews,
+                          widget.video.formattedViews,
                           style: const TextStyle(
                             fontSize: 12,
                             color: Colors.white70,
@@ -245,7 +277,7 @@ class FeaturedCard extends StatelessWidget {
                     const SizedBox(height: 12),
                     // Play button
                     ElevatedButton.icon(
-                      onPressed: onTap,
+                      onPressed: widget.onTap,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
                         foregroundColor: Colors.black,
@@ -268,6 +300,8 @@ class FeaturedCard extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
         ),
       ),
     );

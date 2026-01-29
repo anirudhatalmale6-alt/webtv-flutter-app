@@ -44,9 +44,14 @@ class _LiveTVScreenState extends State<LiveTVScreen> {
       padding: 0 !important;
       margin: 0 !important;
     }
-    .video-container {
+    .video-container, .video-player, iframe, video {
       margin-top: 0 !important;
       max-width: 100% !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
     }
   ''';
 
@@ -62,9 +67,18 @@ class _LiveTVScreenState extends State<LiveTVScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+
+    // In landscape, go fullscreen
+    if (isLandscape) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    } else {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    }
+
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(
+      appBar: isLandscape ? null : AppBar(
         backgroundColor: Colors.black,
         elevation: 0,
         leading: IconButton(
@@ -125,6 +139,16 @@ class _LiveTVScreenState extends State<LiveTVScreen> {
           ),
           if (_isLoading)
             const Center(child: CircularProgressIndicator()),
+          // Back button overlay in landscape
+          if (isLandscape)
+            Positioned(
+              top: 16,
+              left: 16,
+              child: IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
         ],
       ),
     );
@@ -133,6 +157,12 @@ class _LiveTVScreenState extends State<LiveTVScreen> {
   @override
   void dispose() {
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
     super.dispose();
   }
 }
